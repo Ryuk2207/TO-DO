@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Layer 1: Glass Sphere Base (Translucent/Refractive gradient back) -->
+    <path
+        android:pathData="M 54 18 A 36 36 0 1 1 53.9 18 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="18"
+                android:endX="54"
+                android:endY="90"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#20FFFFFF"/>
+                <item android:offset="0.4" android:color="#08FFFFFF"/>
+                <item android:offset="1.0" android:color="#35FFFFFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Layer 2: Inside soft glow / refraction -->
+    <path
+        android:pathData="M 54 20 A 34 34 0 1 1 53.9 20 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="34"
+                android:type="radial">
+                <item android:offset="0.0" android:color="#00FFFFFF"/>
+                <item android:offset="0.75" android:color="#05FFFFFF"/>
+                <item android:offset="0.95" android:color="#1AFFFFFF"/>
+                <item android:offset="1.0" android:color="#40FFFFFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Layer 3: Glass highlight/specular glare (Half moon moonscape shine on the top left) -->
+    <path
+        android:pathData="M 23.5 42 A 32 32 0 0 1 76 26 A 34 34 0 0 0 23.5 42 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="20"
+                android:endX="54"
+                android:endY="45"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#CCFFFFFF"/>
+                <item android:offset="0.6" android:color="#30FFFFFF"/>
+                <item android:offset="1.0" android:color="#00FFFFFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Layer 4: Glass ring border (Top-left high bright, bottom-right softer reflection) -->
+    <path
+        android:pathData="M 54 18 A 36 36 0 1 1 53.9 18 Z"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="25"
+                android:startY="25"
+                android:endX="83"
+                android:endY="83"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#E5FFFFFF"/>
+                <item android:offset="0.3" android:color="#90FFFFFF"/>
+                <item android:offset="0.6" android:color="#15FFFFFF"/>
+                <item android:offset="0.85" android:color="#50FFFFFF"/>
+                <item android:offset="1.0" android:color="#C5FFFFFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Layer 5: Clean white sleek checkmark overlay (Exactly styled as the thin white checkmark in 4th button of image) -->
+    <path
+        android:pathData="M 38 55 L 48 65 L 70 41"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Layer 6: Inside bottom ground crescent reflection (rebound light) -->
+    <path
+        android:pathData="M 32 78 A 32 32 0 0 0 76 78 A 34 34 0 0 1 32 78 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="90"
+                android:endX="54"
+                android:endY="75"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#70FFFFFF"/>
+                <item android:offset="1.0" android:color="#00FFFFFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+</vector>

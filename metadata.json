@@ -1,0 +1,6 @@
+{
+  "name": "TO DO✔️",
+  "description": "A elegant transparent Glassmorphic Todo application featuring automatic streak checking, custom alarm time notifications, task completion checklists, and historical simulation controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
