@@ -49,8 +49,8 @@ fun Modifier.liquidGlass(
             colors = listOf(
                 Color.White.copy(alpha = bgAlpha * 2.8f),      // Glossy top specular reflection
                 Color.White.copy(alpha = bgAlpha * 0.9f),      // Smooth glass face transience
-                Color(0xFF04060A).copy(alpha = 0.85f),         // Dense dark obsidian core absorption
-                Color(0xFF0E1118).copy(alpha = 0.72f),         // Semi-translucent base
+                Color(0xFF04060A).copy(alpha = bgAlpha * 1.5f), // Smooth obsidian core absorption
+                Color(0xFF0E1118).copy(alpha = bgAlpha * 1.2f), // Semi-translucent base
                 Color.White.copy(alpha = bgAlpha * 1.4f)       // Ground bounce reflection rim glow
             ),
             startY = 0f
@@ -89,9 +89,9 @@ fun Modifier.glassButton(
             val center = Offset(width / 2f, height / 2f)
             val r = size.minDimension / 2f
             
-            // 1. Dark core base shadow fill
+            // 1. Transparent liquid glass backing (removed dense dark obsidian/shadow, making it crystal clear)
             drawCircle(
-                color = Color(0x350A0F1D),
+                color = Color.White.copy(alpha = 0.04f),
                 radius = r,
                 center = center
             )
@@ -100,10 +100,10 @@ fun Modifier.glassButton(
             drawCircle(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.28f),      // Glossy top shine
-                        Color.White.copy(alpha = 0.05f),      // Smooth glass face
-                        Color(0xFF0D121F).copy(alpha = 0.35f), // Dense dark obsidian absorption
-                        Color.White.copy(alpha = 0.12f)       // Ground bounce reflection
+                        Color.White.copy(alpha = 0.32f),      // Glossy top shine
+                        Color.White.copy(alpha = 0.08f),      // Smooth glass face
+                        Color.White.copy(alpha = 0.02f),      // Ultra-clear transparent center (no light black spot!)
+                        Color.White.copy(alpha = 0.18f)       // Ground bounce reflection
                     ),
                     startY = 0f,
                     endY = height
@@ -464,16 +464,13 @@ fun GlassText(
                         Color.White.copy(alpha = 0.65f),  // Highly visible frosted core
                         Color.White.copy(alpha = 0.85f)   // Soft reflective bottom bounce
                     )
+                ),
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color.Black.copy(alpha = 0.45f),
+                    offset = Offset(1.5f, 1.5f),
+                    blurRadius = 6f
                 )
-            ),
-            modifier = Modifier.drawBehind {
-                // Subtle 3D background shadow projection to elevate the letters from wallpaper noise
-                drawCircle(
-                    color = Color.Black.copy(alpha = 0.18f),
-                    radius = (size.minDimension * 0.9f).coerceIn(0f, 120f),
-                    center = Offset(size.width * 0.5f, size.height * 0.5f)
-                )
-            }
+            )
         )
         
         // 2. Multi-point refractive gradient border stroke to simulate glass edge reflections

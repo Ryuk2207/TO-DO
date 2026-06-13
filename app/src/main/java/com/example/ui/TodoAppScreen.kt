@@ -18,6 +18,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -38,6 +41,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -149,6 +154,8 @@ fun TodoAppScreen(
     val currentDate by viewModel.currentDate.collectAsStateWithLifecycle()
     val tasks by viewModel.tasks.collectAsStateWithLifecycle()
     val streakState by viewModel.streak.collectAsStateWithLifecycle()
+    val inAppNotifications by viewModel.notifications.collectAsStateWithLifecycle()
+    val slotOrder by viewModel.slotCategories.collectAsStateWithLifecycle()
 
     var currentScreen by remember { mutableStateOf("home") } // "home" or "settings"
 
@@ -160,6 +167,13 @@ fun TodoAppScreen(
     var showFireStreakAnimation by remember { mutableStateOf(false) }
     var fireAnimationStreakValue by remember { mutableIntStateOf(0) }
     var showPermissionExplanation by remember { mutableStateOf(false) }
+    var showNotificationDrawer by remember { mutableStateOf(false) }
+
+    // Intercept phone's physical back button when notification drawer is open
+    BackHandler(enabled = showNotificationDrawer) {
+        showNotificationDrawer = false
+    }
+    var isNotificationStackExpanded by remember { mutableStateOf(false) }
 
     // Dynamic Permission Handling for Android 13+
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -202,13 +216,20 @@ fun TodoAppScreen(
         }
     }
 
+    val backgroundBlurRadius = if (showNotificationDrawer) 16.dp else 0.dp
+
     Box(modifier = modifier.fillMaxSize()) {
-        // High polish multi-style dynamic backdrop layers
-        DynamicAppBackground(
-            isWallpaperEnabled = isWallpaperEnabled,
-            selectedWallpaperStyle = selectedWallpaperStyle,
-            customWallpaperUrl = customWallpaperUrl
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(backgroundBlurRadius)
+        ) {
+            // High polish multi-style dynamic backdrop layers
+            DynamicAppBackground(
+                isWallpaperEnabled = isWallpaperEnabled,
+                selectedWallpaperStyle = selectedWallpaperStyle,
+                customWallpaperUrl = customWallpaperUrl
+            )
 
         // Screen transition
         AnimatedContent(
@@ -295,6 +316,39 @@ fun TodoAppScreen(
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
+
+                            // Notification bell button left of settings in liquid-glass style
+                            IconButton(
+                                onClick = { showNotificationDrawer = true },
+                                modifier = Modifier
+                                    .glassButton(isCircle = true)
+                                    .testTag("notification_button")
+                                    .size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.TopEnd) {
+                                    Icon(
+                                        imageVector = Icons.Default.Notifications,
+                                        contentDescription = "Notifications Drawer",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    
+                                    val notificationListCount = remember(showNotificationDrawer) {
+                                        inAppNotifications.size
+                                    }
+                                    if (notificationListCount > 0) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(7.dp)
+                                                .background(Color(0xFFFFB74D), CircleShape)
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = 1.dp, y = (-1).dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             // Settings gear button at top right (simulation forward day button removed!)
                             IconButton(
@@ -388,13 +442,17 @@ fun TodoAppScreen(
                                     )
                                 }
                             } else {
-                                val slotOrder = listOf(
-                                    "Slot 1: 07AM to 02PM -- Backlog clear",
-                                    "Slot 2: 02PM to 04PM -- Revision",
-                                    "Slot 3: 04PM to 09PM -- Classes",
-                                    "Slot 4: 09PM to 12AM -- Questions and H.W",
-                                    "Custom Tasks"
-                                )
+                                val dynamicSlotOrder = if (slotOrder.isEmpty()) {
+                                    listOf(
+                                        "Slot 1: 07AM to 02PM -- Backlog clear",
+                                        "Slot 2: 02PM to 04PM -- Revision",
+                                        "Slot 3: 04PM to 09PM -- Classes",
+                                        "Slot 4: 09PM to 12AM -- Questions and H.W",
+                                        "Custom Tasks"
+                                    )
+                                } else {
+                                    slotOrder
+                                }
                                 val groupedTasks = remember(tasks) {
                                     tasks.groupBy { it.slotCategory }
                                 }
@@ -406,7 +464,7 @@ fun TodoAppScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                     contentPadding = PaddingValues(bottom = 80.dp)
                                 ) {
-                                    slotOrder.forEach { slotName ->
+                                    dynamicSlotOrder.forEach { slotName ->
                                         val slotTasks = groupedTasks[slotName]
                                         if (!slotTasks.isNullOrEmpty()) {
                                             item(key = "header_$slotName") {
@@ -456,7 +514,8 @@ fun TodoAppScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
-                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.4f, bgAlpha = 0.16f)
+                        .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
+                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -501,6 +560,192 @@ fun TodoAppScreen(
                             Text("Grant Permission", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
+                }
+            }
+        }
+        } // End of outer blur wrapper Box containing background and screen content
+
+        // ------------------------------------------------------------------
+        // RECTANGLE GLASS SYSTEM NOTIFICATION OVERLAY (Slideable & Stackable)
+        // ------------------------------------------------------------------
+        if (showNotificationDrawer) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                // 1. Transparent liquid frosted backdrop that doesn't overlap text
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF07090E).copy(alpha = 0.32f)) // Translucent, very light frosted feel, not very dark or opaque
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { showNotificationDrawer = false }
+                )
+
+                // 2. Clear foreground container with padding that holds the custom rectangle notification tabs
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.94f)
+                        .fillMaxHeight()
+                        .statusBarsPadding()
+                        .padding(top = 24.dp, bottom = 12.dp)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { /* prevent backdrop selection click-through */ }
+                ) {
+                    // Header mimicking iOS Notification Center title
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Notification Center",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                letterSpacing = (-0.5).sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Daily status & alarm logs",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.5f)
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    viewModel.clearAllNotifications()
+                                },
+                                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFFB74D))
+                            ) {
+                                Text(
+                                    text = "Clear All",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { showNotificationDrawer = false },
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(Color.White.copy(alpha = 0.1f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close overlay",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    val notificationList = inAppNotifications
+
+                    if (notificationList.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.15f),
+                                    modifier = Modifier.size(60.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "No Notifications",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    } else {
+                        // Display beautiful items in a single continuous scrollable deck with dynamic fanning stacks
+                        val lazyListState = rememberLazyListState()
+
+                        LazyColumn(
+                            state = lazyListState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .navigationBarsPadding(),
+                            contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            itemsIndexed(notificationList, key = { _, item -> item.id }) { index, item ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .zIndex(100f - index.toFloat())
+                                        .graphicsLayer {
+                                            // Depend on scroll offsets to trigger draw-phase continuous updates
+                                            val scrollTrigger = lazyListState.firstVisibleItemIndex + lazyListState.firstVisibleItemScrollOffset
+                                            
+                                            var transY = 0f
+                                            var sX = 1f
+                                            var sY = 1f
+                                            var alp = 1f
+
+                                            val layoutInfo = lazyListState.layoutInfo
+                                            val visibleItem = layoutInfo.visibleItemsInfo.firstOrNull { visItem -> visItem.index == index }
+                                            if (visibleItem != null) {
+                                                val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+                                                val bottomPaddingPx = 36.dp.toPx()
+                                                val anchorY = viewportHeight - bottomPaddingPx
+                                                
+                                                val itemBottom = visibleItem.offset + visibleItem.size
+                                                if (itemBottom > anchorY) {
+                                                    val extra = itemBottom - anchorY
+                                                    val maxDepthPx = 300.dp.toPx()
+                                                    val depth = (extra / maxDepthPx).coerceIn(0f, 1f)
+                                                    
+                                                    transY = -extra * 0.82f
+                                                    sX = 1f - (depth * 0.16f)
+                                                    sY = 1f - (depth * 0.16f)
+                                                    alp = 1f - (depth * 0.70f)
+                                                }
+                                            }
+
+                                            translationY = transY
+                                            scaleX = sX
+                                            scaleY = sY
+                                            alpha = alp
+                                        }
+                                ) {
+                                    SlideableNotificationCard(
+                                        item = item,
+                                        onDismiss = {
+                                            viewModel.deleteNotification(item)
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }
@@ -767,8 +1012,8 @@ fun TaskItemCard(
                     colors = listOf(
                         Color.White.copy(alpha = (baseBgAlpha * 2.8f).coerceAtMost(1.0f)),      // Specular top highlight glare
                         Color.White.copy(alpha = (baseBgAlpha * 0.9f).coerceAtMost(1.0f)),      // Sleek upper face transparency
-                        Color(0xFF04060A).copy(alpha = 0.85f * bgAlphaModifier), // Extremely deep charcoal-black absorption
-                        Color(0xFF0E1118).copy(alpha = 0.72f * bgAlphaModifier), // Translucent carbon base body
+                        Color(0xFF04060A).copy(alpha = (baseBgAlpha * 1.5f).coerceAtMost(1.0f)), // Smooth obsidian core absorption
+                        Color(0xFF0E1118).copy(alpha = (baseBgAlpha * 1.2f).coerceAtMost(1.0f)), // Semi-translucent base
                         Color.White.copy(alpha = (baseBgAlpha * 1.4f).coerceAtMost(1.0f))       // Ground bounce upward reflect rim
                     ),
                     startY = 0f,
@@ -1008,6 +1253,139 @@ fun SettingsScreenView(
     var isResolvingUrl by remember { mutableStateOf(false) }
     var inputUrl by remember { mutableStateOf(customWallpaperUrl) }
 
+    val rawSlots by viewModel.slotCategories.collectAsStateWithLifecycle()
+    val dynamicSlotOrder = if (rawSlots.isEmpty()) {
+        listOf(
+            "Slot 1: 07AM to 02PM -- Backlog clear",
+            "Slot 2: 02PM to 04PM -- Revision",
+            "Slot 3: 04PM to 09PM -- Classes",
+            "Slot 4: 09PM to 12AM -- Questions and H.W",
+            "Custom Tasks"
+        )
+    } else {
+        rawSlots
+    }
+
+    val tasksState by viewModel.tasks.collectAsStateWithLifecycle()
+
+    var showSlotManageSection by remember { mutableStateOf(false) }
+    var showTaskManageSection by remember { mutableStateOf(false) }
+
+    // Dialog state for adding a slot
+    var showAddSlotDialog by remember { mutableStateOf(false) }
+    var newSlotNameInput by remember { mutableStateOf("") }
+
+    // Dialog state for editing a slot
+    var editingSlotNameOld by remember { mutableStateOf<String?>(null) }
+    var editingSlotNameNew by remember { mutableStateOf("") }
+
+    // Dialog state for editing a task
+    var editingTask by remember { mutableStateOf<com.example.data.Task?>(null) }
+    var editingTaskTitle by remember { mutableStateOf("") }
+    var editingTaskHour by remember { mutableIntStateOf(12) }
+    var editingTaskMinute by remember { mutableIntStateOf(0) }
+    var editingTaskSlot by remember { mutableStateOf("") }
+
+    // Dialog state for adding a task
+    var showAddTaskDialog by remember { mutableStateOf(false) }
+    var addTaskTitleInput by remember { mutableStateOf("") }
+    var addTaskHourInput by remember { mutableIntStateOf(12) }
+    var addTaskMinuteInput by remember { mutableIntStateOf(0) }
+    var addTaskSlotInput by remember { mutableStateOf("") }
+
+    val pickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                isResolvingUrl = true
+                try {
+                    val stream = context.contentResolver.openInputStream(uri)
+                    if (stream != null) {
+                        val mimeType = context.contentResolver.getType(uri) ?: ""
+                        val isVideo = mimeType.startsWith("video") || uri.toString().contains("video", ignoreCase = true)
+                        val ext = if (isVideo) "mp4" else "jpg"
+                        val destinationFile = java.io.File(context.filesDir, "custom_wallpaper.$ext")
+                        
+                        if (destinationFile.exists()) {
+                            destinationFile.delete()
+                        }
+                        
+                        destinationFile.outputStream().use { outStream ->
+                            stream.copyTo(outStream)
+                        }
+                        
+                        val path = destinationFile.absolutePath
+                        inputUrl = path
+                        onCustomWallpaperUrlChanged(path)
+                        onWallpaperStyleChanged("custom_photo")
+                        Toast.makeText(context, "Local ${if (isVideo) "video" else "image"} wallpaper loaded!", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Failed to import file: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                } finally {
+                    isResolvingUrl = false
+                }
+            }
+        }
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val outputStream = context.contentResolver.openOutputStream(uri)
+                if (outputStream != null) {
+                    viewModel.exportData(
+                        context = context,
+                        outputStream = outputStream,
+                        onSuccess = {
+                            Toast.makeText(context, "All data successfully exported!", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { error ->
+                            Toast.makeText(context, "Export failed: $error", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Unable to save file: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    viewModel.importData(
+                        context = context,
+                        inputStream = inputStream,
+                        onSettingsLoaded = { wallEnabled, wallStyle, wallUrl, vibEnabled, soundEnabled, notifEnabled ->
+                            onWallpaperEnabledChanged(wallEnabled)
+                            onWallpaperStyleChanged(wallStyle)
+                            onCustomWallpaperUrlChanged(wallUrl)
+                            onVibrationEnabledChanged(vibEnabled)
+                            onSoundsEnabledChanged(soundEnabled)
+                            onNotificationsEnabledChanged(notifEnabled)
+                        },
+                        onSuccess = {
+                            Toast.makeText(context, "Import successful! Restored wallpaper, streak, and checklist.", Toast.LENGTH_LONG).show()
+                        },
+                        onError = { error ->
+                            Toast.makeText(context, "Import failed: $error", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Unable to read backup file: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     val imagePresets = listOf(
         "Campfire Glow" to "https://images.unsplash.com/photo-1542382156909-9ae37b3f56fa?auto=format&fit=crop&q=80&w=1200",
         "Cosmic Peak" to "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?auto=format&fit=crop&q=80&w=1200",
@@ -1194,6 +1572,32 @@ fun SettingsScreenView(
                                 .fillMaxWidth()
                                 .testTag("custom_wallpaper_input")
                         )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Button(
+                            onClick = { pickerLauncher.launch("*/*") },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .glassButton(cornerRadius = 14.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = "Choose local video or image",
+                                tint = Color(0xFFFF9100),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "📁 Choose Local Video / Image",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
@@ -1392,6 +1796,285 @@ fun SettingsScreenView(
                 }
             }
 
+            // SYSTEM ACCESS PANEL
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(cornerRadius = 20.dp, borderAlpha = 0.35f, bgAlpha = 0.08f)
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "ADVANCED SYSTEM ACCESS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.5f),
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Text(
+                    text = "Manage system slot categories, rename boundaries, and explicitly edit/add structured tasks including title, time, and precise alert schedules.",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    lineHeight = 15.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Toggle Custom Slots
+                    Button(
+                        onClick = {
+                            showSlotManageSection = !showSlotManageSection
+                            showTaskManageSection = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = if (showSlotManageSection) Color(0xFFFF9100).copy(alpha = 0.2f) else Color.Transparent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .glassButton(cornerRadius = 14.dp)
+                    ) {
+                        Text(
+                            text = if (showSlotManageSection) "🎯 Hide Slots" else "🛠️ Manage Slots",
+                            color = if (showSlotManageSection) Color(0xFFFF9100) else Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Toggle Custom Tasks
+                    Button(
+                        onClick = {
+                            showTaskManageSection = !showTaskManageSection
+                            showSlotManageSection = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = if (showTaskManageSection) Color(0xFFFF9100).copy(alpha = 0.2f) else Color.Transparent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .glassButton(cornerRadius = 14.dp)
+                    ) {
+                        Text(
+                            text = if (showTaskManageSection) "📋 Hide Tasks" else "📝 Manage Tasks",
+                            color = if (showTaskManageSection) Color(0xFFFF9100) else Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Expandable Slots Section
+                if (showSlotManageSection) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Add Slot Button
+                    Button(
+                        onClick = {
+                            newSlotNameInput = ""
+                            showAddSlotDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .glassButton(cornerRadius = 12.dp)
+                    ) {
+                        Text(text = "➕ Add Custom Slot", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        dynamicSlotOrder.forEach { slot ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White.copy(alpha = 0.04f), shape = RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = slot,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                
+                                if (slot != "Custom Tasks") {
+                                    Row {
+                                        IconButton(
+                                            onClick = {
+                                                editingSlotNameOld = slot
+                                                editingSlotNameNew = slot
+                                            }
+                                        ) {
+                                            Text(text = "✏️", fontSize = 14.sp)
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.removeSlotCategory(slot)
+                                            }
+                                        ) {
+                                            Text(text = "🗑️", fontSize = 14.sp)
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = "Locked",
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.3f),
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Expandable Tasks Section
+                if (showTaskManageSection) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Add Task Button
+                    Button(
+                        onClick = {
+                            addTaskTitleInput = ""
+                            addTaskHourInput = 12
+                            addTaskMinuteInput = 0
+                            addTaskSlotInput = dynamicSlotOrder.firstOrNull() ?: "Custom Tasks"
+                            showAddTaskDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .glassButton(cornerRadius = 12.dp)
+                    ) {
+                        Text(text = "➕ Add Custom Task", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (tasksState.isEmpty()) {
+                        Text(
+                            text = "No tasks found for today. Add a custom task to begin!",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            tasksState.forEach { task ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.White.copy(alpha = 0.04f), shape = RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = task.title,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "${task.slotCategory} • ⏰ ${String.format(java.util.Locale.getDefault(), "%02d:%02d", task.hour, task.minute)}",
+                                            fontSize = 10.sp,
+                                            color = Color.White.copy(alpha = 0.5f)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            editingTask = task
+                                            editingTaskTitle = task.title
+                                            editingTaskHour = task.hour
+                                            editingTaskMinute = task.minute
+                                            editingTaskSlot = task.slotCategory
+                                        }
+                                    ) {
+                                        Text(text = "✏️", fontSize = 16.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // BACKUP & DEVICE TRANSFER ZONE
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(cornerRadius = 20.dp, borderAlpha = 0.3f, bgAlpha = 0.08f)
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "BACKUP & DEVICE TRANSFER",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.5f),
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Text(
+                    text = "Export your app data (including wallpaper, streak count, checklist ticks, and alert settings) to a file on this device. Move this file to a new device and import it to clone your entire setup. Note: Importing will erase any existing settings on the target device.",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    lineHeight = 15.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Export button
+                    Button(
+                        onClick = {
+                            try {
+                                exportLauncher.launch("liquid_glass_todo_backup.json")
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Failed to start export: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        modifier = Modifier
+                            .weight(1.5f)
+                            .glassButton(cornerRadius = 14.dp)
+                    ) {
+                        Text(text = "📤 Export Data", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Import button
+                    Button(
+                        onClick = {
+                            try {
+                                importLauncher.launch(arrayOf("application/json", "*/*"))
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Failed to start import: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        modifier = Modifier
+                            .weight(1.5f)
+                            .glassButton(cornerRadius = 14.dp)
+                    ) {
+                        Text(text = "📥 Import Data", color = Color(0xFFFF9100), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             // RECOVERY ZONE
             Column(
                 modifier = Modifier
@@ -1435,7 +2118,8 @@ fun SettingsScreenView(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth(0.95f)
-                            .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.4f, bgAlpha = 0.2f)
+                            .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
+                            .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -1486,6 +2170,423 @@ fun SettingsScreenView(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+
+        // Add Slot Dialog
+        if (showAddSlotDialog) {
+            Dialog(onDismissRequest = { showAddSlotDialog = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
+                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "➕ Add Custom Slot Category",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = newSlotNameInput,
+                        onValueChange = { newSlotNameInput = it },
+                        placeholder = { Text("e.g. Slot 5: Evening Focus", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showAddSlotDialog = false }) {
+                            Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (newSlotNameInput.isNotBlank()) {
+                                    viewModel.addSlotCategory(newSlotNameInput)
+                                    showAddSlotDialog = false
+                                    newSlotNameInput = ""
+                                } else {
+                                    Toast.makeText(context, "Slot Name cannot be empty", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100))
+                        ) {
+                            Text("Add", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Edit Slot Dialog
+        if (editingSlotNameOld != null) {
+            Dialog(onDismissRequest = { editingSlotNameOld = null }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
+                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "📝 Rename Slot Category",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = editingSlotNameNew,
+                        onValueChange = { editingSlotNameNew = it },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { editingSlotNameOld = null }) {
+                            Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                val oldName = editingSlotNameOld
+                                if (oldName != null && editingSlotNameNew.isNotBlank()) {
+                                    viewModel.renameSlotCategory(oldName, editingSlotNameNew)
+                                    editingSlotNameOld = null
+                                    editingSlotNameNew = ""
+                                } else {
+                                    Toast.makeText(context, "Slot Name cannot be empty", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100))
+                        ) {
+                            Text("Rename", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add Task Dialog
+        if (showAddTaskDialog) {
+            Dialog(onDismissRequest = { showAddTaskDialog = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.95f)
+                        .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
+                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🆕 Add Custom Task Details",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = addTaskTitleInput,
+                        onValueChange = { addTaskTitleInput = it },
+                        label = { Text("Task Title", color = Color.White.copy(alpha = 0.6f)) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = addTaskHourInput.toString(),
+                            onValueChange = { addTaskHourInput = it.toIntOrNull()?.coerceIn(0, 23) ?: 12 },
+                            label = { Text("Hour (0-23)", color = Color.White.copy(alpha = 0.6f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        OutlinedTextField(
+                            value = addTaskMinuteInput.toString(),
+                            onValueChange = { addTaskMinuteInput = it.toIntOrNull()?.coerceIn(0, 59) ?: 0 },
+                            label = { Text("Minute (0-59)", color = Color.White.copy(alpha = 0.6f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Text(
+                        text = "SELECT SLOT CATEGORY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.align(Alignment.Start).padding(bottom = 6.dp)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        dynamicSlotOrder.forEach { slot ->
+                            val isSelected = addTaskSlotInput == slot
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { addTaskSlotInput = slot }
+                                    .background(
+                                        if (isSelected) Color(0xFFFF9100).copy(alpha = 0.25f)
+                                        else Color.White.copy(alpha = 0.05f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isSelected) "🟢 $slot" else "⚪ $slot",
+                                    fontSize = 12.sp,
+                                    color = if (isSelected) Color(0xFFFF9100) else Color.White,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { showAddTaskDialog = false }) {
+                            Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = {
+                                if (addTaskTitleInput.isNotBlank()) {
+                                    viewModel.addTaskWithSlot(
+                                        addTaskTitleInput,
+                                        addTaskHourInput,
+                                        addTaskMinuteInput,
+                                        addTaskSlotInput
+                                    )
+                                    showAddTaskDialog = false
+                                    addTaskTitleInput = ""
+                                } else {
+                                    Toast.makeText(context, "Title cannot be blank", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100))
+                        ) {
+                            Text("Add Task", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Edit Task Dialog
+        if (editingTask != null) {
+            Dialog(onDismissRequest = { editingTask = null }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.95f)
+                        .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
+                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "✏️ Edit Task Details",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = editingTaskTitle,
+                        onValueChange = { editingTaskTitle = it },
+                        label = { Text("Task Title", color = Color.White.copy(alpha = 0.6f)) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editingTaskHour.toString(),
+                            onValueChange = { editingTaskHour = it.toIntOrNull()?.coerceIn(0, 23) ?: 12 },
+                            label = { Text("Hour (0-23)", color = Color.White.copy(alpha = 0.6f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        OutlinedTextField(
+                            value = editingTaskMinute.toString(),
+                            onValueChange = { editingTaskMinute = it.toIntOrNull()?.coerceIn(0, 59) ?: 0 },
+                            label = { Text("Minute (0-59)", color = Color.White.copy(alpha = 0.6f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Text(
+                        text = "ASSIGN TO SLOT CATEGORY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.align(Alignment.Start).padding(bottom = 6.dp)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        dynamicSlotOrder.forEach { slot ->
+                            val isSelected = editingTaskSlot == slot
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { editingTaskSlot = slot }
+                                    .background(
+                                        if (isSelected) Color(0xFFFF9100).copy(alpha = 0.25f)
+                                        else Color.White.copy(alpha = 0.05f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isSelected) "🟢 $slot" else "⚪ $slot",
+                                    fontSize = 12.sp,
+                                    color = if (isSelected) Color(0xFFFF9100) else Color.White,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                editingTask?.let { task ->
+                                    viewModel.deleteTask(task)
+                                    editingTask = null
+                                }
+                            }
+                        ) {
+                            Text(text = "🗑️", fontSize = 22.sp)
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            TextButton(onClick = { editingTask = null }) {
+                                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                            }
+
+                            Button(
+                                onClick = {
+                                    editingTask?.let { task ->
+                                        if (editingTaskTitle.isNotBlank()) {
+                                            viewModel.updateTaskDetails(
+                                                task,
+                                                editingTaskTitle,
+                                                editingTaskHour,
+                                                editingTaskMinute,
+                                                editingTaskSlot
+                                            )
+                                            editingTask = null
+                                        } else {
+                                            Toast.makeText(context, "Title cannot be blank", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100))
+                            ) {
+                                Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -1708,84 +2809,107 @@ fun CustomPhotoBackground(imageUrl: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Runs a highly-efficient real-time background video wallpaper using a WebView loaded with an HTML5 <video> element.
+ * Runs a highly-efficient real-time background video wallpaper using a native MediaPlayer inside a TextureView.
+ * Supports both local files (offline device storage imports) and network streaming video URLs.
  */
 @Composable
 fun CustomVideoBackground(videoUrl: String, modifier: Modifier = Modifier) {
-    val htmlContent = remember(videoUrl) {
-        """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-            <style>
-                html, body {
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                    height: 100%;
-                    overflow: hidden;
-                    background-color: transparent;
-                }
-                video {
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    min-width: 100%;
-                    min-height: 100%;
-                    width: auto;
-                    height: auto;
-                    object-fit: cover;
-                    background-color: transparent;
-                }
-            </style>
-        </head>
-        <body>
-            <video autoplay muted loop playsinline id="bg-video">
-                <source src="$videoUrl" type="video/mp4">
-                <source src="$videoUrl" type="video/webm">
-                <source src="$videoUrl" type="video/ogg">
-            </video>
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    var v = document.getElementById('bg-video');
-                    v.play().catch(function(e) {
-                        console.log("Autoplay check:", e);
-                    });
-                });
-            </script>
-        </body>
-        </html>
-        """.trimIndent()
-    }
+    val context = LocalContext.current
+    val mediaPlayerRef = remember { mutableStateOf<MediaPlayer?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
-                android.webkit.WebView(ctx).apply {
-                    setBackgroundColor(0) // transparent background
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        mediaPlaybackRequiresUserGesture = false
-                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                val textureView = TextureView(ctx)
+                textureView.apply {
+                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
+                            val surface = Surface(surfaceTexture)
+                            try {
+                                mediaPlayerRef.value?.release()
+                                val mp = MediaPlayer().apply {
+                                    setSurface(surface)
+                                    if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://") || videoUrl.startsWith("content://")) {
+                                        setDataSource(ctx, android.net.Uri.parse(videoUrl))
+                                    } else {
+                                        setDataSource(videoUrl)
+                                    }
+                                    isLooping = true
+                                    setVolume(0f, 0f) // mute background music
+                                    setOnPreparedListener { player ->
+                                        // Center Crop / Aspect Ratio cover
+                                        val videoWidth = player.videoWidth.toFloat()
+                                        val videoHeight = player.videoHeight.toFloat()
+                                        if (videoWidth > 0f && videoHeight > 0f) {
+                                            val viewWidth = textureView.width.toFloat()
+                                            val viewHeight = textureView.height.toFloat()
+                                            val sx = viewWidth / videoWidth
+                                            val sy = viewHeight / videoHeight
+                                            val maxScale = kotlin.math.max(sx, sy)
+                                            val matrix = Matrix()
+                                            matrix.setScale(maxScale / sx, maxScale / sy, viewWidth / 2f, viewHeight / 2f)
+                                            textureView.setTransform(matrix)
+                                        }
+                                        player.start()
+                                    }
+                                    prepareAsync()
+                                }
+                                mediaPlayerRef.value = mp
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+
+                        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+                            val mp = mediaPlayerRef.value ?: return
+                            try {
+                                val videoWidth = mp.videoWidth.toFloat()
+                                val videoHeight = mp.videoHeight.toFloat()
+                                if (videoWidth > 0f && videoHeight > 0f) {
+                                    val viewWidth = width.toFloat()
+                                    val viewHeight = height.toFloat()
+                                    val sx = viewWidth / videoWidth
+                                    val sy = viewHeight / videoHeight
+                                    val maxScale = kotlin.math.max(sx, sy)
+                                    val matrix = Matrix()
+                                    matrix.setScale(maxScale / sx, maxScale / sy, viewWidth / 2f, viewHeight / 2f)
+                                    textureView.setTransform(matrix)
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+
+                        override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                            mediaPlayerRef.value?.release()
+                            mediaPlayerRef.value = null
+                            return true
+                        }
+
+                        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
                     }
-                    webChromeClient = android.webkit.WebChromeClient()
-                    webViewClient = android.webkit.WebViewClient()
-                    
-                    // Load HTML content
-                    loadDataWithBaseURL(null, htmlContent, "text/html", "UTF-8", null)
                 }
             },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            onRelease = {
+                mediaPlayerRef.value?.release()
+                mediaPlayerRef.value = null
+            }
         )
+
         // Add premium darkened overlay matching custom photo wallpaper
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.55f))
         )
+    }
+
+    DisposableEffect(videoUrl) {
+        onDispose {
+            mediaPlayerRef.value?.release()
+            mediaPlayerRef.value = null
+        }
     }
 }
 
@@ -1797,17 +2921,6 @@ fun FireCelebrationOverlay(
     streakCount: Int,
     onDismiss: () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "CelebrationEmbers")
-    val animationTime by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(28000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "celebrationSparks"
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1815,40 +2928,6 @@ fun FireCelebrationOverlay(
             .clickable(enabled = true, onClick = onDismiss),
         contentAlignment = Alignment.Center
     ) {
-        // Floating Celebratory Sparks rising up across full screen
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-            val width = size.width
-            val height = size.height
-            if (width > 0 && height > 0) {
-                for (i in 0 until 40) {
-                    val seedX = (i * 97) % 1000 / 1000f
-                    val seedY = (i * 43) % 1000 / 1000f
-                    val speed = 0.08f + (i % 6) * 0.03f
-                    val sizeFactor = 4.dp.toPx() + (i % 5) * 2.dp.toPx()
-
-                    val angle1 = (animationTime * 0.02f + i.toFloat()).toDouble()
-                    val x = (seedX * width + kotlin.math.sin(angle1).toFloat() * 60.dp.toPx()) % width
-                    val y = (height - (seedY * height + animationTime * speed * height) % height) % height
-                    val angle2 = (animationTime * 0.07f + i.toFloat()).toDouble()
-                    val opacity = (0.3f + 0.62f * kotlin.math.sin(angle2).toFloat()).coerceIn(0f, 1f)
-
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFFD54F).copy(alpha = opacity),
-                                Color(0xFFFF7043).copy(alpha = opacity * 0.25f),
-                                Color.Transparent
-                            ),
-                            center = Offset(x, y),
-                            radius = sizeFactor * 4
-                        ),
-                        radius = sizeFactor,
-                        center = Offset(x, y)
-                    )
-                }
-            }
-        }
-
         // Inner celebratory crystal card
         Column(
             modifier = Modifier
@@ -1870,7 +2949,7 @@ fun FireCelebrationOverlay(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Giant Flame Drawing
-            FireFlameAnimation(modifier = Modifier.size(140.dp))
+            FireFlameAnimation(modifier = Modifier.size(150.dp))
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -1917,147 +2996,223 @@ fun FireCelebrationOverlay(
 
 /**
  * Wavy canvas-based flame rendering celebrating streak increases.
+ * Styled as a gorgeous 2D cartoon flame with layered fire tongues and floating detached ember sparks as requested.
  */
 @Composable
 fun FireFlameAnimation(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "FlameAnimation")
     
-    val heightScaleOuter by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.15f,
+    // Wave animation phase
+    val waveTime by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6.28318f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1300, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "outerY"
-    )
-    val widthScaleOuter by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "outerX"
+        label = "waveTime"
     )
 
-    val heightScaleInner by infiniteTransition.animateFloat(
+    // Breathing height scales
+    val heightScaleOuter by infiniteTransition.animateFloat(
         initialValue = 0.9f,
         targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "outerHeight"
+    )
+    
+    val heightScaleInner by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.15f,
         animationSpec = infiniteRepeatable(
             animation = tween(800, easing = LinearOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "innerY"
-    )
-    
-    val flameSway by infiniteTransition.animateFloat(
-        initialValue = -5f,
-        targetValue = 5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "sway"
+        label = "innerHeight"
     )
 
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val cx = width * 0.5f
-        val cy = height * 0.85f // bottom base
+        val cy = height * 0.82f // bottom base
         
-        // Draw fire base glow
+        // Dynamic bottom glow
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFFFF5722).copy(alpha = 0.4f),
+                    Color(0xFFFF1744).copy(alpha = 0.4f),
+                    Color(0xFFFF9100).copy(alpha = 0.15f),
                     Color.Transparent
                 ),
                 center = Offset(cx, cy),
-                radius = width * 0.6f
+                radius = width * 0.55f
             ),
-            radius = width * 0.6f,
+            radius = width * 0.55f,
             center = Offset(cx, cy)
         )
 
-        // Outer Flame (Red/Crimson)
-        val pathOuter = Path().apply {
-            moveTo(cx - 30.dp.toPx() * widthScaleOuter, cy)
-            quadraticTo(
-                cx - 15.dp.toPx() + flameSway.dp.toPx(),
-                cy - 50.dp.toPx() * heightScaleOuter,
-                cx + flameSway.dp.toPx() * 1.5f,
-                cy - 90.dp.toPx() * heightScaleOuter
-            )
-            quadraticTo(
-                cx + 15.dp.toPx() + flameSway.dp.toPx(),
-                cy - 50.dp.toPx() * heightScaleOuter,
-                cx + 30.dp.toPx() * widthScaleOuter,
-                cy
-            )
+        // Floating detached fire drops/ember caps rising from the tip
+        for (i in 0..2) {
+            val phaseOffset = i * (6.28318f / 3f)
+            val dropProgress = ((waveTime + phaseOffset) % 6.28318f) / 6.28318f // 0f to 1f
+            
+            val startY = cy - height * 0.7f
+            val endY = cy - height * 1.35f
+            val curY = startY + (endY - startY) * dropProgress
+            
+            // Side drift air physics
+            val driftX = cx + kotlin.math.sin((waveTime * 1.8f + i * 1.5f).toDouble()).toFloat() * width * 0.08f
+            
+            // Starts small, grows, and shrinks completely
+            val rawSize = 6.dp.toPx() + (i % 2) * 2.dp.toPx()
+            val dropSize = if (dropProgress < 0.2f) {
+                rawSize * (dropProgress / 0.2f)
+            } else {
+                rawSize * (1f - dropProgress)
+            }
+            
+            val alpha = (1f - dropProgress).coerceIn(0f, 1f)
+            
+            if (dropSize > 0.5f) {
+                drawCircle(
+                    color = Color(0xFFFF3D00).copy(alpha = alpha * 0.75f),
+                    center = Offset(driftX, curY),
+                    radius = dropSize * 1.5f
+                )
+                drawCircle(
+                    color = Color(0xFFFFEB3B).copy(alpha = alpha * 0.95f),
+                    center = Offset(driftX, curY),
+                    radius = dropSize * 0.8f
+                )
+            }
+        }
+
+        // OUTER LICKING FLAME (Red-Crimson)
+        val outerPath = Path().apply {
+            val startX = cx - width * 0.28f
+            moveTo(startX, cy)
+            
+            // Left tongue curves
+            val lCtrl1X = cx - width * 0.45f + kotlin.math.sin(waveTime.toDouble() + 0.0).toFloat() * width * 0.08f
+            val lCtrl1Y = cy - height * 0.25f
+            val lPt1X = cx - width * 0.15f + kotlin.math.sin(waveTime.toDouble() + 0.8).toFloat() * width * 0.05f
+            val lPt1Y = cy - height * 0.42f
+            
+            val lCtrl2X = cx - width * 0.26f + kotlin.math.sin(waveTime.toDouble() + 1.6).toFloat() * width * 0.06f
+            val lCtrl2Y = cy - height * 0.62f
+            val tipX = cx + kotlin.math.sin(waveTime.toDouble() + 2.4).toFloat() * width * 0.12f
+            val tipY = cy - height * 0.82f * heightScaleOuter
+            
+            cubicTo(lCtrl1X, lCtrl1Y, lPt1X, lPt1Y, tipX, tipY)
+            
+            // Right curve back down (asymmetric for organic cartoon motion)
+            val rCtrl1X = cx + width * 0.18f + kotlin.math.sin(waveTime.toDouble() + 3.2).toFloat() * width * 0.06f
+            val rCtrl1Y = cy - height * 0.58f
+            val rPt1X = cx + width * 0.22f + kotlin.math.sin(waveTime.toDouble() + 4.0).toFloat() * width * 0.05f
+            val rPt1Y = cy - height * 0.38f
+            
+            val rCtrl2X = cx + width * 0.42f + kotlin.math.sin(waveTime.toDouble() + 1.2).toFloat() * width * 0.08f
+            val rCtrl2Y = cy - height * 0.18f
+            val endX = cx + width * 0.28f
+            
+            cubicTo(rCtrl1X, rCtrl1Y, rPt1X, rPt1Y, endX, cy)
+            
+            // Base connection
+            quadraticTo(cx, cy + height * 0.06f, startX, cy)
             close()
         }
         drawPath(
-            path = pathOuter,
+            path = outerPath,
             brush = Brush.verticalGradient(
                 colors = listOf(
-                    Color(0xFFFF3D00).copy(alpha = 0.95f),
-                    Color(0xFFD50000).copy(alpha = 0.4f)
+                    Color(0xFFE53935),  // Vivid crimson
+                    Color(0xFFB71C1C)   // Deep solid red
                 )
             )
         )
 
-        // Middle Flame (Bright Orange)
-        val pathMiddle = Path().apply {
-            moveTo(cx - 20.dp.toPx() * widthScaleOuter, cy)
-            quadraticTo(
-                cx - 10.dp.toPx() + flameSway.dp.toPx() * 0.8f,
-                cy - 35.dp.toPx() * heightScaleInner,
-                cx + flameSway.dp.toPx() * 0.8f,
-                cy - 65.dp.toPx() * heightScaleInner
-            )
-            quadraticTo(
-                cx + 10.dp.toPx() + flameSway.dp.toPx() * 0.8f,
-                cy - 35.dp.toPx() * heightScaleInner,
-                cx + 20.dp.toPx() * widthScaleOuter,
-                cy
-            )
+        // MIDDLE LICKING FLAME (Vivid Orange)
+        val middlePath = Path().apply {
+            val startX = cx - width * 0.2f
+            moveTo(startX, cy)
+            
+            val lCtrl1X = cx - width * 0.32f + kotlin.math.sin(waveTime.toDouble() + 0.4).toFloat() * width * 0.06f
+            val lCtrl1Y = cy - height * 0.22f
+            val lPt1X = cx - width * 0.12f + kotlin.math.sin(waveTime.toDouble() + 1.2).toFloat() * width * 0.04f
+            val lPt1Y = cy - height * 0.36f
+            
+            val lCtrl2X = cx - width * 0.18f + kotlin.math.sin(waveTime.toDouble() + 2.0).toFloat() * width * 0.04f
+            val lCtrl2Y = cy - height * 0.52f
+            val tipX = cx + kotlin.math.sin(waveTime.toDouble() + 2.8).toFloat() * width * 0.08f
+            val tipY = cy - height * 0.68f * heightScaleInner
+            
+            cubicTo(lCtrl1X, lCtrl1Y, lPt1X, lPt1Y, tipX, tipY)
+            
+            val rCtrl1X = cx + width * 0.13f + kotlin.math.sin(waveTime.toDouble() + 3.6).toFloat() * width * 0.04f
+            val rCtrl1Y = cy - height * 0.48f
+            val rPt1X = cx + width * 0.16f + kotlin.math.sin(waveTime.toDouble() + 4.4).toFloat() * width * 0.03f
+            val rPt1Y = cy - height * 0.32f
+            
+            val rCtrl2X = cx + width * 0.32f + kotlin.math.sin(waveTime.toDouble() + 1.6).toFloat() * width * 0.06f
+            val rCtrl2Y = cy - height * 0.15f
+            val endX = cx + width * 0.2f
+            
+            cubicTo(rCtrl1X, rCtrl1Y, rPt1X, rPt1Y, endX, cy)
+            
+            quadraticTo(cx, cy + height * 0.04f, startX, cy)
             close()
         }
         drawPath(
-            path = pathMiddle,
+            path = middlePath,
             brush = Brush.verticalGradient(
                 colors = listOf(
-                    Color(0xFFFF9100).copy(alpha = 0.9f),
-                    Color(0xFFFF3D00).copy(alpha = 0.5f)
+                    Color(0xFFFB8C00),  // Bright orange
+                    Color(0xFFE65100)   // Burnt orange
                 )
             )
         )
 
-        // Inner Core Flame (Warm Amber Gold)
-        val pathInner = Path().apply {
-            moveTo(cx - 12.dp.toPx(), cy)
-            quadraticTo(
-                cx - 5.dp.toPx() + flameSway.dp.toPx() * 0.4f,
-                cy - 20.dp.toPx() * heightScaleInner,
-                cx,
-                cy - 40.dp.toPx() * heightScaleInner
-            )
-            quadraticTo(
-                cx + 5.dp.toPx() + flameSway.dp.toPx() * 0.4f,
-                cy - 20.dp.toPx() * heightScaleInner,
-                cx + 12.dp.toPx(),
-                cy
-            )
+        // INNER GOLDEN CORE (Solar Yellow-White)
+        val innerPath = Path().apply {
+            val startX = cx - width * 0.12f
+            moveTo(startX, cy)
+            
+            val lCtrl1X = cx - width * 0.20f + kotlin.math.sin(waveTime.toDouble() + 0.8).toFloat() * width * 0.03f
+            val lCtrl1Y = cy - height * 0.18f
+            val lPt1X = cx - width * 0.08f + kotlin.math.sin(waveTime.toDouble() + 1.6).toFloat() * width * 0.02f
+            val lPt1Y = cy - height * 0.28f
+            
+            val lCtrl2X = cx - width * 0.10f + kotlin.math.sin(waveTime.toDouble() + 2.4).toFloat() * width * 0.02f
+            val lCtrl2Y = cy - height * 0.4f
+            val tipX = cx + kotlin.math.sin(waveTime.toDouble() + 3.2).toFloat() * width * 0.05f
+            val tipY = cy - height * 0.5f * heightScaleInner
+            
+            cubicTo(lCtrl1X, lCtrl1Y, lPt1X, lPt1Y, tipX, tipY)
+            
+            val rCtrl1X = cx + width * 0.08f + kotlin.math.sin(waveTime.toDouble() + 4.0).toFloat() * width * 0.02f
+            val rCtrl1Y = cy - height * 0.38f
+            val rPt1X = cx + width * 0.10f + kotlin.math.sin(waveTime.toDouble() + 4.8).toFloat() * width * 0.02f
+            val rPt1Y = cy - height * 0.25f
+            
+            val rCtrl2X = cx + width * 0.20f + kotlin.math.sin(waveTime.toDouble() + 2.0).toFloat() * width * 0.03f
+            val rCtrl2Y = cy - height * 0.12f
+            val endX = cx + width * 0.12f
+            
+            cubicTo(rCtrl1X, rCtrl1Y, rPt1X, rPt1Y, endX, cy)
+            
+            quadraticTo(cx, cy + height * 0.02f, startX, cy)
             close()
         }
         drawPath(
-            path = pathInner,
+            path = innerPath,
             brush = Brush.verticalGradient(
                 colors = listOf(
-                    Color(0xFFFFEA00),
-                    Color(0xFFFF9100).copy(alpha = 0.75f)
+                    Color(0xFFFFFFE0),  // Bright yellow-white
+                    Color(0xFFFFD54F)   // Golden amber
                 )
             )
         )
@@ -2244,8 +3399,8 @@ fun StreakCard(
                     colors = listOf(
                         Color.White.copy(alpha = bgAlpha * 2.8f),
                         Color.White.copy(alpha = bgAlpha * 0.9f),
-                        Color(0xFF04060A).copy(alpha = 0.85f),
-                        Color(0xFF0E1118).copy(alpha = 0.72f),
+                        Color(0xFF04060A).copy(alpha = bgAlpha * 1.5f),
+                        Color(0xFF0E1118).copy(alpha = bgAlpha * 1.2f),
                         Color.White.copy(alpha = bgAlpha * 1.4f)
                     ),
                     startY = 0f,
@@ -2396,6 +3551,136 @@ fun StreakCard(
                     color = Color.White.copy(alpha = 0.4f)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun SlideableNotificationCard(
+    item: com.example.data.InAppNotificationEntity,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    scale: Float = 1f,
+    alpha: Float = 1f
+) {
+    var offsetX by remember(item) { mutableStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    val animatedOffsetX by animateFloatAsState(
+        targetValue = offsetX,
+        animationSpec = if (isDragging) snap() else spring(stiffness = Spring.StiffnessMediumLow),
+        label = "SwipeOffset"
+    )
+    
+    val maxDismissThreshold = 140f
+    
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                translationX = animatedOffsetX
+                this.alpha = alpha * (1f - (kotlin.math.abs(animatedOffsetX) / 600f)).coerceIn(0f, 1f)
+                scaleX = scale
+                scaleY = scale
+            }
+            .pointerInput(item) {
+                detectHorizontalDragGestures(
+                    onDragStart = { isDragging = true },
+                    onDragEnd = {
+                        isDragging = false
+                        if (kotlin.math.abs(offsetX) > maxDismissThreshold) {
+                            onDismiss()
+                        } else {
+                            offsetX = 0f
+                        }
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        offsetX = 0f
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        offsetX += dragAmount * 1.25f
+                    }
+                )
+            }
+    ) {
+        NotificationCardContent(item = item)
+    }
+}
+
+@Composable
+fun NotificationCardContent(
+    item: com.example.data.InAppNotificationEntity,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .liquidGlass(cornerRadius = 18.dp, borderAlpha = 0.28f, bgAlpha = 0.08f)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            val icon = when {
+                item.title.contains("Ticked", ignoreCase = true) -> Icons.Default.Warning
+                item.title.contains("Secure", ignoreCase = true) -> Icons.Default.Lock
+                item.title.contains("Task", ignoreCase = true) -> Icons.Default.CheckCircle
+                else -> Icons.Default.Notifications
+            }
+            
+            val iconTint = when {
+                item.title.contains("Ticked", ignoreCase = true) -> Color(0xFFFFB74D)
+                item.title.contains("Secure", ignoreCase = true) -> Color(0xFFFF8A80)
+                item.title.contains("Task", ignoreCase = true) -> Color(0xFF81C784)
+                else -> Color.White.copy(alpha = 0.9f)
+            }
+            
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(14.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = item.title,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = item.time,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.45f)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = item.text,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.White.copy(alpha = 0.85f),
+                lineHeight = 15.sp
+            )
         }
     }
 }

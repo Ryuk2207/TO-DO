@@ -111,4 +111,82 @@ object AlarmScheduler {
             Log.d(TAG, "Successfully canceled alarm for task ${task.id}")
         }
     }
+
+    fun scheduleDailyChecks(context: Context) {
+        val safeContext = context.safeAttribution()
+        val alarmManager = safeContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+
+        // 1. 2 PM Alarm (14:00)
+        scheduleDailyAlarmAt(safeContext, alarmManager, 14, 0, 9922, "alert_2pm")
+
+        // 2. 8 PM Alarm (20:00)
+        scheduleDailyAlarmAt(safeContext, alarmManager, 20, 0, 9988, "alert_8pm")
+    }
+
+    private fun scheduleDailyAlarmAt(
+        context: Context,
+        alarmManager: AlarmManager,
+        hour: Int,
+        minute: Int,
+        requestCode: Int,
+        actionExtra: String
+    ) {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("daily_check_type", actionExtra) // "alert_2pm" or "alert_8pm"
+        }
+
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        // If time has already passed today, schedule for tomorrow
+        if (calendar.timeInMillis <= System.currentTimeMillis()) {
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        calendar.timeInMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        calendar.timeInMillis,
+                        pendingIntent
+                    )
+                }
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+            }
+            Log.d(TAG, "Scheduled daily $actionExtra check at ${calendar.time} with request code $requestCode")
+        } catch (e: Exception) {
+            try {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+            } catch (ex: Exception) {
+                Log.e(TAG, "Failed to schedule daily check $actionExtra", ex)
+            }
+        }
+    }
 }

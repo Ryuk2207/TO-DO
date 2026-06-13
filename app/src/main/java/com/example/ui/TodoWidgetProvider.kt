@@ -49,22 +49,9 @@ class TodoWidgetProvider : AppWidgetProvider() {
             val todayTasks = taskDao.getTasksForDateList(todayStr)
             val hasTasks = todayTasks.isNotEmpty()
 
-            // Pre-calculate/generate wavy glass bitmap on the background thread
-            // Standard nice high-quality container dimensions (600x450px)
-            val wavyBg = try {
-                createWavyBitmap(context, 600, 450)
-            } catch (e: Exception) {
-                Log.e("TodoWidgetProvider", "Error generating wavy background", e)
-                null
-            }
-
             withContext(Dispatchers.Main) {
                 for (widgetId in appWidgetIds) {
                     val views = RemoteViews(context.packageName, R.layout.todo_widget)
-
-                    if (wavyBg != null) {
-                        views.setImageViewBitmap(R.id.widget_background, wavyBg)
-                    }
 
                     // 1. Set the Title & Streak status
                     views.setTextViewText(R.id.widget_streak, streakText)
@@ -147,7 +134,11 @@ class TodoWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private fun createWavyBitmap(context: Context, width: Int, height: Int): Bitmap {
+    private fun createWavyBitmap(context: Context, width: Int, height: Int): Bitmap? {
+        return null
+    }
+
+    private fun unused_createWavyBitmap(context: Context, width: Int, height: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         

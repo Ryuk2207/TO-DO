@@ -11,10 +11,41 @@ class TaskRepository(private val taskDao: TaskDao) {
 
     suspend fun checkAndPrepopulateTasksForDate(dateString: String): List<Task> {
         val existing = taskDao.getTasksForDateList(dateString)
+        if (existing.isNotEmpty()) {
+            var updated = false
+            for (task in existing) {
+                if (task.title == "lecture 1") {
+                    taskDao.updateTask(task.copy(title = "Physics Question practice"))
+                    updated = true
+                } else if (task.title == "lecture 2") {
+                    taskDao.updateTask(task.copy(title = "Physical chemistry lecture"))
+                    updated = true
+                } else if (task.title == "lecture 3") {
+                    taskDao.updateTask(task.copy(title = "Maths lecture"))
+                    updated = true
+                } else if (task.title == "previous day revision" && task.timeRange == "02PM to 04PM") {
+                    taskDao.updateTask(task.copy(title = "last day revision"))
+                    updated = true
+                } else if (task.title == "2nd lecture H.W/DPP" || task.title == "2st lecture H.W/DPP") {
+                    if (task.title != "2st lecture H.W/DPP") {
+                        taskDao.updateTask(task.copy(title = "2st lecture H.W/DPP"))
+                        updated = true
+                    }
+                } else if (task.title == "3rd lecture H.W/DPP" || task.title == "3st lecture H.W/DPP") {
+                    if (task.title != "3st lecture H.W/DPP" || task.timeRange != "11PM to 12PM") {
+                        taskDao.updateTask(task.copy(title = "3st lecture H.W/DPP", timeRange = "11PM to 12PM"))
+                        updated = true
+                    }
+                }
+            }
+            if (updated) {
+                return taskDao.getTasksForDateList(dateString)
+            }
+        }
         if (existing.isEmpty()) {
             val defaultTasks = listOf(
                 Task(
-                    title = "lecture 1",
+                    title = "Physics Question practice",
                     timeRange = "07AM to 09AM",
                     hour = 7,
                     minute = 0,
@@ -23,7 +54,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
                 ),
                 Task(
-                    title = "lecture 2",
+                    title = "Physical chemistry lecture",
                     timeRange = "09AM to 11AM",
                     hour = 9,
                     minute = 0,
@@ -41,7 +72,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
                 ),
                 Task(
-                    title = "lecture 3",
+                    title = "Maths lecture",
                     timeRange = "12PM to 02PM",
                     hour = 12,
                     minute = 0,
@@ -50,7 +81,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
                 ),
                 Task(
-                    title = "lecture 4",
+                    title = "last day revision",
                     timeRange = "02PM to 04PM",
                     hour = 14,
                     minute = 0,
@@ -87,7 +118,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                 ),
                 Task(
                     title = "3st lecture H.W/DPP",
-                    timeRange = "11PM to 12AM",
+                    timeRange = "11PM to 12PM",
                     hour = 23,
                     minute = 0,
                     isCompleted = false,
@@ -195,6 +226,43 @@ class TaskRepository(private val taskDao: TaskDao) {
     suspend fun clearAllData() {
         taskDao.clearAllTasks()
         taskDao.clearAllStreaks()
+        taskDao.clearAllNotifications()
+    }
+
+    suspend fun getAllTasksDirect(): List<Task> {
+        return taskDao.getAllTasksDirect()
+    }
+
+    suspend fun getAllNotificationsDirect(): List<InAppNotificationEntity> {
+        return taskDao.getAllNotificationsDirect()
+    }
+
+    suspend fun getStreakDirect(): Streak? {
+        return taskDao.getStreakDirect()
+    }
+
+    suspend fun insertOrUpdateStreak(streak: Streak) {
+        taskDao.insertOrUpdateStreak(streak)
+    }
+
+    fun getAllNotifications(): Flow<List<InAppNotificationEntity>> {
+        return taskDao.getAllNotifications()
+    }
+
+    suspend fun insertNotification(notification: InAppNotificationEntity) {
+        taskDao.insertNotification(notification)
+    }
+
+    suspend fun deleteNotification(notification: InAppNotificationEntity) {
+        taskDao.deleteNotification(notification)
+    }
+
+    suspend fun deleteNotificationById(id: Int) {
+        taskDao.deleteNotificationById(id)
+    }
+
+    suspend fun clearAllNotifications() {
+        taskDao.clearAllNotifications()
     }
 }
 

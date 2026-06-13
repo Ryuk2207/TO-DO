@@ -1,12 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <corners android:radius="20dp" />
-    <gradient
-        android:startColor="#600B1124"
-        android:endColor="#401A2B54"
-        android:angle="135"/>
-    <stroke
-        android:width="1.2dp"
-        android:color="#4DFFFFFF"/>
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Layer 1: Minimal contrast shadow backing (barely perceptible, protects white text on white wallpapers) -->
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="18dp" />
+            <solid android:color="#0D000000" />
+        </shape>
+    </item>
+
+    <!-- Layer 2: Ultra-transparent main glass surface plate -->
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="1dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="17dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#08FFFFFF"
+                android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+
+    <!-- Layer 3: Ultra-delicate diagonal reflective sheer glare -->
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="1dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="17dp" />
+            <gradient
+                android:angle="135"
+                android:startColor="#0AFFFFFF"
+                android:centerColor="#00FFFFFF"
+                android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+
+    <!-- Layer 4: Delicate reflection/glint along top-left curve -->
+    <item android:left="1.2dp" android:top="1.2dp" android:right="1.2dp" android:bottom="1.2dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="17dp" />
+            <gradient
+                android:angle="135"
+                android:startColor="#2AFFFFFF"
+                android:centerColor="#06FFFFFF"
+                android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+
+    <!-- Layer 5: Lucid polished crystal edge stroke (high specular precision rim) -->
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="18dp" />
+            <stroke
+                android:width="1.2dp"
+                android:color="#77FFFFFF" />
+        </shape>
+    </item>
+
+</layer-list>

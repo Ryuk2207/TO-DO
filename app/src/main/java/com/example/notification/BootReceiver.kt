@@ -15,15 +15,16 @@ class BootReceiver : BroadcastReceiver() {
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val db = AppDatabase.getDatabase(context)
+                    val database = AppDatabase.getDatabase(context)
                     val today = DateHelper.getTodayString()
                     // Re-schedule all uncompleted tasks for today
-                    val tasks = db.taskDao().getTasksForDateList(today)
+                    val tasks = database.taskDao().getTasksForDateList(today)
                     for (task in tasks) {
                         if (!task.isCompleted) {
                             AlarmScheduler.scheduleAlarm(context, task)
                         }
                     }
+                    AlarmScheduler.scheduleDailyChecks(context)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
