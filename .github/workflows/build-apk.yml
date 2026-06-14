@@ -9,6 +9,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Added permission block so GitHub Actions is allowed to create an official Release
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -19,7 +23,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # FIXED: Creates a default debug keystore so the signing task doesn't fail
       - name: Create default debug keystore
         run: |
           mkdir -p ~/.android
@@ -34,3 +37,13 @@ jobs:
         with:
           name: TO-DO-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      # NEW STEP: Automatically creates a GitHub Release and attaches the APK file
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: app/build/outputs/apk/debug/app-debug.apk
