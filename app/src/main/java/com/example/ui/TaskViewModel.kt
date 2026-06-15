@@ -515,25 +515,47 @@ class TaskViewModel(
     fun loadSlotCategories() {
         val sharedPrefs = getApplication<Application>().getSharedPreferences("todo_settings", android.content.Context.MODE_PRIVATE)
         val serialized = sharedPrefs.getString("slot_categories", null)
+        val defaults = listOf(
+            "Slot 1: 07AM to 02PM -- Backlog clear",
+            "Slot 2: 02PM to 04PM -- Revision",
+            "Slot 3: 04PM to 09PM -- Classes",
+            "Slot 4: 09PM to 12AM -- Questions and H.W",
+            "Custom Tasks"
+        )
         if (serialized == null) {
-            val defaults = listOf(
-                "Slot 1: 07AM to 02PM -- Backlog clear",
-                "Slot 2: 02PM to 04PM -- Revision",
-                "Slot 3: 04PM to 09PM -- Classes",
-                "Slot 4: 09PM to 12AM -- Questions and H.W",
-                "Custom Tasks"
-            )
             saveSlotsToPrefs(defaults)
         } else {
             try {
                 val array = org.json.JSONArray(serialized)
                 val list = mutableListOf<String>()
+                var hasChanges = false
                 for (i in 0 until array.length()) {
-                    list.add(array.getString(i))
+                    val raw = array.getString(i)
+                    val norm = com.example.data.DateHelper.normalizeSlotName(raw)
+                    if (raw != norm) {
+                        hasChanges = true
+                    }
+                    list.add(norm)
                 }
-                slotCategories.value = list
+                
+                // Ensure required defaults are present
+                val requiredDefaults = defaults.take(4)
+                for (req in requiredDefaults) {
+                    if (!list.contains(req)) {
+                        list.add(0, req)
+                        hasChanges = true
+                    }
+                }
+                
+                val distinctList = list.distinct()
+                if (hasChanges || distinctList.size != list.size) {
+                    saveSlotsToPrefs(distinctList)
+                } else {
+                    slotCategories.value = distinctList
+                }
             } catch (e: Exception) {
                 android.util.Log.e("TaskViewModel", "Error loading slots", e)
+                saveSlotsToPrefs(defaults)
             }
         }
     }

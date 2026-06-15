@@ -78,4 +78,20 @@ object DateHelper {
     fun isSameOrLater(dateChecked: String, dateBase: String): Boolean {
         return dateChecked >= dateBase
     }
+
+    /**
+     * Normalizes slot names to guarantee exact matches between database records and preferences,
+     * overcoming legacy variations in double-hyphen spacing.
+     */
+    fun normalizeSlotName(slot: String): String {
+        val trimmed = slot.trim()
+        return when {
+            trimmed.contains("Slot 1", ignoreCase = true) -> "Slot 1: 07AM to 02PM -- Backlog clear"
+            trimmed.contains("Slot 2", ignoreCase = true) -> "Slot 2: 02PM to 04PM -- Revision"
+            trimmed.contains("Slot 3", ignoreCase = true) -> "Slot 3: 04PM to 09PM -- Classes"
+            trimmed.contains("Slot 4", ignoreCase = true) -> "Slot 4: 09PM to 12AM -- Questions and H.W"
+            trimmed.contains("Custom Tasks", ignoreCase = true) -> "Custom Tasks"
+            else -> trimmed
+        }
+    }
 }

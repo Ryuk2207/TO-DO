@@ -451,7 +451,7 @@ fun TodoAppScreen(
                                         "Custom Tasks"
                                     )
                                 } else {
-                                    slotOrder
+                                    slotOrder.map { DateHelper.normalizeSlotName(it) }
                                 }
                                 val groupedTasks = remember(tasks) {
                                     tasks.groupBy { it.slotCategory }
@@ -1263,7 +1263,7 @@ fun SettingsScreenView(
             "Custom Tasks"
         )
     } else {
-        rawSlots
+        rawSlots.map { DateHelper.normalizeSlotName(it) }
     }
 
     val tasksState by viewModel.tasks.collectAsStateWithLifecycle()

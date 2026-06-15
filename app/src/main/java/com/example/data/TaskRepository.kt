@@ -14,26 +14,34 @@ class TaskRepository(private val taskDao: TaskDao) {
         if (existing.isNotEmpty()) {
             var updated = false
             for (task in existing) {
-                if (task.title == "lecture 1") {
-                    taskDao.updateTask(task.copy(title = "Physics Question practice"))
+                var currentTaskObj = task
+                val normSlot = DateHelper.normalizeSlotName(task.slotCategory)
+                if (task.slotCategory != normSlot) {
+                    currentTaskObj = currentTaskObj.copy(slotCategory = normSlot)
+                    taskDao.updateTask(currentTaskObj)
                     updated = true
-                } else if (task.title == "lecture 2") {
-                    taskDao.updateTask(task.copy(title = "Physical chemistry lecture"))
+                }
+
+                if (currentTaskObj.title == "lecture 1") {
+                    taskDao.updateTask(currentTaskObj.copy(title = "Physics Question practice"))
                     updated = true
-                } else if (task.title == "lecture 3") {
-                    taskDao.updateTask(task.copy(title = "Maths lecture"))
+                } else if (currentTaskObj.title == "lecture 2") {
+                    taskDao.updateTask(currentTaskObj.copy(title = "Physical chemistry lecture"))
                     updated = true
-                } else if (task.title == "previous day revision" && task.timeRange == "02PM to 04PM") {
-                    taskDao.updateTask(task.copy(title = "last day revision"))
+                } else if (currentTaskObj.title == "lecture 3") {
+                    taskDao.updateTask(currentTaskObj.copy(title = "Maths lecture"))
                     updated = true
-                } else if (task.title == "2nd lecture H.W/DPP" || task.title == "2st lecture H.W/DPP") {
-                    if (task.title != "2st lecture H.W/DPP") {
-                        taskDao.updateTask(task.copy(title = "2st lecture H.W/DPP"))
+                } else if (currentTaskObj.title == "previous day revision" && currentTaskObj.timeRange == "02PM to 04PM") {
+                    taskDao.updateTask(currentTaskObj.copy(title = "last day revision"))
+                    updated = true
+                } else if (currentTaskObj.title == "2nd lecture H.W/DPP" || currentTaskObj.title == "2st lecture H.W/DPP") {
+                    if (currentTaskObj.title != "2st lecture H.W/DPP") {
+                        taskDao.updateTask(currentTaskObj.copy(title = "2st lecture H.W/DPP"))
                         updated = true
                     }
-                } else if (task.title == "3rd lecture H.W/DPP" || task.title == "3st lecture H.W/DPP") {
-                    if (task.title != "3st lecture H.W/DPP" || task.timeRange != "11PM to 12PM") {
-                        taskDao.updateTask(task.copy(title = "3st lecture H.W/DPP", timeRange = "11PM to 12PM"))
+                } else if (currentTaskObj.title == "3rd lecture H.W/DPP" || currentTaskObj.title == "3st lecture H.W/DPP") {
+                    if (currentTaskObj.title != "3st lecture H.W/DPP" || currentTaskObj.timeRange != "11PM to 12PM") {
+                        taskDao.updateTask(currentTaskObj.copy(title = "3st lecture H.W/DPP", timeRange = "11PM to 12PM"))
                         updated = true
                     }
                 }
