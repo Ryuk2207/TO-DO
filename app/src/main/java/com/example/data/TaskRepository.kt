@@ -9,7 +9,7 @@ class TaskRepository(private val taskDao: TaskDao) {
         return taskDao.getTasksForDate(dateString)
     }
 
-    suspend fun checkAndPrepopulateTasksForDate(dateString: String): List<Task> {
+    suspend fun checkAndPrepopulateTasksForDate(dateString: String, currentSlots: List<String> = emptyList()): List<Task> {
         val existing = taskDao.getTasksForDateList(dateString)
         if (existing.isNotEmpty()) {
             var updated = false
@@ -51,6 +51,11 @@ class TaskRepository(private val taskDao: TaskDao) {
             }
         }
         if (existing.isEmpty()) {
+            val slot1Name = currentSlots.find { it.contains("Slot 1", ignoreCase = true) } ?: "Slot 1: 07AM to 02PM -- Backlog clear"
+            val slot2Name = currentSlots.find { it.contains("Slot 2", ignoreCase = true) } ?: "Slot 2: 02PM to 04PM -- Revision"
+            val slot3Name = currentSlots.find { it.contains("Slot 3", ignoreCase = true) } ?: "Slot 3: 04PM to 09PM -- Classes"
+            val slot4Name = currentSlots.find { it.contains("Slot 4", ignoreCase = true) } ?: "Slot 4: 09PM to 12AM -- Questions and H.W"
+
             val defaultTasks = listOf(
                 Task(
                     title = "Physics Question practice",
@@ -59,7 +64,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
+                    slotCategory = slot1Name
                 ),
                 Task(
                     title = "Physical chemistry lecture",
@@ -68,7 +73,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
+                    slotCategory = slot1Name
                 ),
                 Task(
                     title = "Break",
@@ -77,7 +82,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
+                    slotCategory = slot1Name
                 ),
                 Task(
                     title = "Maths lecture",
@@ -86,7 +91,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
+                    slotCategory = slot1Name
                 ),
                 Task(
                     title = "last day revision",
@@ -95,7 +100,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 2: 02PM to 04PM -- Revision"
+                    slotCategory = slot2Name
                 ),
                 Task(
                     title = "live lectures",
@@ -104,7 +109,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 3: 04PM to 09PM -- Classes"
+                    slotCategory = slot3Name
                 ),
                 Task(
                     title = "1st lecture H.W/DPP",
@@ -113,7 +118,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 4: 09PM to 12AM -- Questions and H.W"
+                    slotCategory = slot4Name
                 ),
                 Task(
                     title = "2st lecture H.W/DPP",
@@ -122,7 +127,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 4: 09PM to 12AM -- Questions and H.W"
+                    slotCategory = slot4Name
                 ),
                 Task(
                     title = "3st lecture H.W/DPP",
@@ -131,7 +136,7 @@ class TaskRepository(private val taskDao: TaskDao) {
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 4: 09PM to 12AM -- Questions and H.W"
+                    slotCategory = slot4Name
                 )
             )
             for (task in defaultTasks) {
@@ -142,8 +147,8 @@ class TaskRepository(private val taskDao: TaskDao) {
         return existing
     }
 
-    suspend fun getTasksForDateList(dateString: String): List<Task> {
-        checkAndPrepopulateTasksForDate(dateString)
+    suspend fun getTasksForDateList(dateString: String, currentSlots: List<String> = emptyList()): List<Task> {
+        checkAndPrepopulateTasksForDate(dateString, currentSlots)
         return taskDao.getTasksForDateList(dateString)
     }
 
