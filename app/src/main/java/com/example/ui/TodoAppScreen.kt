@@ -159,6 +159,13 @@ fun TodoAppScreen(
 
     var currentScreen by remember { mutableStateOf("home") } // "home" or "settings"
 
+    // Hoisted task editing state variables
+    var editingTask by remember { mutableStateOf<com.example.data.Task?>(null) }
+    var editingTaskTitle by remember { mutableStateOf("") }
+    var editingTaskHour by remember { mutableIntStateOf(12) }
+    var editingTaskMinute by remember { mutableIntStateOf(0) }
+    var editingTaskSlot by remember { mutableStateOf("") }
+
     // Intercept phone's physical back button to return to home screen instead of closing the app
     BackHandler(enabled = currentScreen == "settings") {
         currentScreen = "home"
@@ -261,7 +268,14 @@ fun TodoAppScreen(
                     isNotificationsEnabled = isNotificationsEnabled,
                     onNotificationsEnabledChanged = updateNotificationsEnabled,
                     onBack = { currentScreen = "home" },
-                    viewModel = viewModel
+                    viewModel = viewModel,
+                    onRequestEditTask = { task ->
+                        editingTask = task
+                        editingTaskTitle = task.title
+                        editingTaskHour = task.hour
+                        editingTaskMinute = task.minute
+                        editingTaskSlot = task.slotCategory
+                    }
                 )
             } else {
                 // Primary Surface Scaffold
@@ -451,7 +465,7 @@ fun TodoAppScreen(
                                         "Custom Tasks"
                                     )
                                 } else {
-                                    slotOrder.map { DateHelper.normalizeSlotName(it) }
+                                    slotOrder
                                 }
                                 val groupedTasks = remember(tasks) {
                                     tasks.groupBy { it.slotCategory }
@@ -487,7 +501,14 @@ fun TodoAppScreen(
                                                         playSystemTick()
                                                         viewModel.toggleTaskCompletion(task)
                                                     },
-                                                    onDelete = { viewModel.deleteTask(task) }
+                                                    onDelete = { viewModel.deleteTask(task) },
+                                                    onEdit = {
+                                                        editingTask = task
+                                                        editingTaskTitle = task.title
+                                                        editingTaskHour = task.hour
+                                                        editingTaskMinute = task.minute
+                                                        editingTaskSlot = task.slotCategory
+                                                    }
                                                 )
                                             }
                                         }
@@ -558,6 +579,159 @@ fun TodoAppScreen(
                             modifier = Modifier.glassButton(cornerRadius = 16.dp)
                         ) {
                             Text("Grant Permission", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Edit Task Dialog
+        val currentEditingTask = editingTask
+        if (currentEditingTask != null) {
+            Dialog(onDismissRequest = { editingTask = null }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.95f)
+                        .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
+                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "✏️ Edit Task Details",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = editingTaskTitle,
+                        onValueChange = { editingTaskTitle = it },
+                        label = { Text("Task Title", color = Color.White.copy(alpha = 0.6f)) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editingTaskHour.toString(),
+                            onValueChange = { editingTaskHour = it.toIntOrNull()?.coerceIn(0, 23) ?: 12 },
+                            label = { Text("Hour (0-23)", color = Color.White.copy(alpha = 0.6f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        OutlinedTextField(
+                            value = editingTaskMinute.toString(),
+                            onValueChange = { editingTaskMinute = it.toIntOrNull()?.coerceIn(0, 59) ?: 0 },
+                            label = { Text("Minute (0-59)", color = Color.White.copy(alpha = 0.6f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Text(
+                        text = "SELECT SLOT CATEGORY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.align(Alignment.Start).padding(bottom = 6.dp)
+                    )
+
+                    val dynamicSlotOrderEdit = if (slotOrder.isEmpty()) {
+                        listOf(
+                            "Slot 1: 07AM to 02PM -- Backlog clear",
+                            "Slot 2: 02PM to 04PM -- Revision",
+                            "Slot 3: 04PM to 09PM -- Classes",
+                            "Slot 4: 09PM to 12AM -- Questions and H.W",
+                            "Custom Tasks"
+                        )
+                    } else {
+                        slotOrder
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        dynamicSlotOrderEdit.forEach { slot ->
+                            val isSelected = editingTaskSlot == slot
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { editingTaskSlot = slot }
+                                    .background(
+                                        if (isSelected) Color(0xFFFF9100).copy(alpha = 0.25f)
+                                        else Color.White.copy(alpha = 0.05f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isSelected) "🟢 $slot" else "⚪ $slot",
+                                    fontSize = 12.sp,
+                                    color = if (isSelected) Color(0xFFFF9100) else Color.White,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { editingTask = null }) {
+                            Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = {
+                                if (editingTaskTitle.isNotBlank()) {
+                                    viewModel.updateTaskDetails(
+                                        task = currentEditingTask,
+                                        title = editingTaskTitle,
+                                        hour = editingTaskHour,
+                                        minute = editingTaskMinute,
+                                        slotCategory = editingTaskSlot
+                                    )
+                                    editingTask = null
+                                } else {
+                                    Toast.makeText(context, "Title cannot be blank", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100))
+                        ) {
+                            Text("Save Changes", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -909,6 +1083,7 @@ fun TaskItemCard(
     task: Task,
     onCompletedToggle: () -> Unit,
     onDelete: () -> Unit,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -1206,21 +1381,40 @@ fun TaskItemCard(
             }
         }
 
-        // Deletable ONLY if it is a Custom Task (immutable daily slots cannot be deleted ever!)
-        if (task.slotCategory == "Custom Tasks") {
+        // Edit and Delete Actions
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             IconButton(
-                onClick = onDelete,
+                onClick = onEdit,
                 modifier = Modifier
                     .glassButton(isCircle = true)
                     .size(36.dp)
-                    .testTag("delete_task_${task.id}")
+                    .testTag("edit_task_${task.id}")
             ) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Remove Task",
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit Task Details",
                     tint = Color.White.copy(alpha = 0.85f),
                     modifier = Modifier.size(16.dp)
                 )
+            }
+            if (task.slotCategory == "Custom Tasks") {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .glassButton(isCircle = true)
+                        .size(36.dp)
+                        .testTag("delete_task_${task.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Remove Task",
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }
@@ -1245,7 +1439,8 @@ fun SettingsScreenView(
     isNotificationsEnabled: Boolean,
     onNotificationsEnabledChanged: (Boolean) -> Unit,
     onBack: () -> Unit,
-    viewModel: TaskViewModel
+    viewModel: TaskViewModel,
+    onRequestEditTask: (com.example.data.Task) -> Unit
 ) {
     val context = LocalContext.current.safeAttribution()
     val scrollState = rememberScrollState()
@@ -1263,7 +1458,7 @@ fun SettingsScreenView(
             "Custom Tasks"
         )
     } else {
-        rawSlots.map { DateHelper.normalizeSlotName(it) }
+        rawSlots
     }
 
     val tasksState by viewModel.tasks.collectAsStateWithLifecycle()
@@ -1278,13 +1473,6 @@ fun SettingsScreenView(
     // Dialog state for editing a slot
     var editingSlotNameOld by remember { mutableStateOf<String?>(null) }
     var editingSlotNameNew by remember { mutableStateOf("") }
-
-    // Dialog state for editing a task
-    var editingTask by remember { mutableStateOf<com.example.data.Task?>(null) }
-    var editingTaskTitle by remember { mutableStateOf("") }
-    var editingTaskHour by remember { mutableIntStateOf(12) }
-    var editingTaskMinute by remember { mutableIntStateOf(0) }
-    var editingTaskSlot by remember { mutableStateOf("") }
 
     // Dialog state for adding a task
     var showAddTaskDialog by remember { mutableStateOf(false) }
@@ -1990,17 +2178,35 @@ fun SettingsScreenView(
                                             color = Color.White.copy(alpha = 0.5f)
                                         )
                                     }
-
-                                    IconButton(
-                                        onClick = {
-                                            editingTask = task
-                                            editingTaskTitle = task.title
-                                            editingTaskHour = task.hour
-                                            editingTaskMinute = task.minute
-                                            editingTaskSlot = task.slotCategory
-                                        }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text(text = "✏️", fontSize = 16.sp)
+                                        IconButton(
+                                            onClick = { onRequestEditTask(task) },
+                                            modifier = Modifier.size(32.dp).testTag("settings_edit_task_${task.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit Task",
+                                                tint = Color.White.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        if (task.slotCategory == "Custom Tasks") {
+                                            IconButton(
+                                                onClick = { viewModel.deleteTask(task) },
+                                                modifier = Modifier.size(32.dp).testTag("settings_delete_task_${task.id}")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Delete Task",
+                                                    tint = Color(0xFFEF5350).copy(alpha = 0.8f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -2425,161 +2631,6 @@ fun SettingsScreenView(
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100))
                         ) {
                             Text("Add Task", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Edit Task Dialog
-        if (editingTask != null) {
-            Dialog(onDismissRequest = { editingTask = null }) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(0.95f)
-                        .background(Color(0xF50F1320), shape = RoundedCornerShape(24.dp))
-                        .liquidGlass(cornerRadius = 24.dp, borderAlpha = 0.6f, bgAlpha = 0.42f)
-                        .padding(20.dp)
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "✏️ Edit Task Details",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = editingTaskTitle,
-                        onValueChange = { editingTaskTitle = it },
-                        label = { Text("Task Title", color = Color.White.copy(alpha = 0.6f)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = editingTaskHour.toString(),
-                            onValueChange = { editingTaskHour = it.toIntOrNull()?.coerceIn(0, 23) ?: 12 },
-                            label = { Text("Hour (0-23)", color = Color.White.copy(alpha = 0.6f)) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
-                            ),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        OutlinedTextField(
-                            value = editingTaskMinute.toString(),
-                            onValueChange = { editingTaskMinute = it.toIntOrNull()?.coerceIn(0, 59) ?: 0 },
-                            label = { Text("Minute (0-59)", color = Color.White.copy(alpha = 0.6f)) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFFFF9100).copy(alpha = 0.7f),
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
-                            ),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Text(
-                        text = "ASSIGN TO SLOT CATEGORY",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.align(Alignment.Start).padding(bottom = 6.dp)
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        dynamicSlotOrder.forEach { slot ->
-                            val isSelected = editingTaskSlot == slot
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { editingTaskSlot = slot }
-                                    .background(
-                                        if (isSelected) Color(0xFFFF9100).copy(alpha = 0.25f)
-                                        else Color.White.copy(alpha = 0.05f),
-                                        shape = RoundedCornerShape(10.dp)
-                                    )
-                                    .padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (isSelected) "🟢 $slot" else "⚪ $slot",
-                                    fontSize = 12.sp,
-                                    color = if (isSelected) Color(0xFFFF9100) else Color.White,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                editingTask?.let { task ->
-                                    viewModel.deleteTask(task)
-                                    editingTask = null
-                                }
-                            }
-                        ) {
-                            Text(text = "🗑️", fontSize = 22.sp)
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            TextButton(onClick = { editingTask = null }) {
-                                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
-                            }
-
-                            Button(
-                                onClick = {
-                                    editingTask?.let { task ->
-                                        if (editingTaskTitle.isNotBlank()) {
-                                            viewModel.updateTaskDetails(
-                                                task,
-                                                editingTaskTitle,
-                                                editingTaskHour,
-                                                editingTaskMinute,
-                                                editingTaskSlot
-                                            )
-                                            editingTask = null
-                                        } else {
-                                            Toast.makeText(context, "Title cannot be blank", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100))
-                            ) {
-                                Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
-                            }
                         }
                     }
                 }

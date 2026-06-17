@@ -78,12 +78,4 @@ object DateHelper {
     fun isSameOrLater(dateChecked: String, dateBase: String): Boolean {
         return dateChecked >= dateBase
     }
-
-    /**
-     * Normalizes slot names to guarantee exact matches between database records and preferences,
-     * overcoming legacy variations in double-hyphen spacing.
-     */
-    fun normalizeSlotName(slot: String): String {
-        return slot.trim()
-    }
 }

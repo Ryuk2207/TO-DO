@@ -23,7 +23,7 @@ class TaskViewModel(
     val tasks: StateFlow<List<Task>> = _currentDate
         .flatMapLatest { date ->
             flow {
-                val list = repository.checkAndPrepopulateTasksForDate(date, slotCategories.value)
+                val list = repository.checkAndPrepopulateTasksForDate(date)
                 list.forEach { task ->
                     if (!task.isCompleted) {
                         AlarmScheduler.scheduleAlarm(application, task)
@@ -143,7 +143,7 @@ class TaskViewModel(
             repository.insertTask(newTask)
             
             // Query full task with newly assigned ID from database to schedule alarm properly
-            val updatedTasks = repository.getTasksForDateList(date, slotCategories.value)
+            val updatedTasks = repository.getTasksForDateList(date)
             // Retrieve latest added task with matching attributes
             val insertedTask = updatedTasks.find { 
                 it.title == title && it.hour == hour && it.minute == minute && !it.isCompleted 
@@ -515,34 +515,25 @@ class TaskViewModel(
     fun loadSlotCategories() {
         val sharedPrefs = getApplication<Application>().getSharedPreferences("todo_settings", android.content.Context.MODE_PRIVATE)
         val serialized = sharedPrefs.getString("slot_categories", null)
-        val defaults = listOf(
-            "Slot 1: 07AM to 02PM -- Backlog clear",
-            "Slot 2: 02PM to 04PM -- Revision",
-            "Slot 3: 04PM to 09PM -- Classes",
-            "Slot 4: 09PM to 12AM -- Questions and H.W",
-            "Custom Tasks"
-        )
         if (serialized == null) {
+            val defaults = listOf(
+                "Slot 1: 07AM to 02PM -- Backlog clear",
+                "Slot 2: 02PM to 04PM -- Revision",
+                "Slot 3: 04PM to 09PM -- Classes",
+                "Slot 4: 09PM to 12AM -- Questions and H.W",
+                "Custom Tasks"
+            )
             saveSlotsToPrefs(defaults)
         } else {
             try {
                 val array = org.json.JSONArray(serialized)
                 val list = mutableListOf<String>()
                 for (i in 0 until array.length()) {
-                    val raw = array.getString(i)
-                    val norm = com.example.data.DateHelper.normalizeSlotName(raw)
-                    list.add(norm)
+                    list.add(array.getString(i))
                 }
-                
-                if (!list.contains("Custom Tasks")) {
-                    list.add("Custom Tasks")
-                }
-                
-                val distinctList = list.distinct()
-                saveSlotsToPrefs(distinctList)
+                slotCategories.value = list
             } catch (e: Exception) {
                 android.util.Log.e("TaskViewModel", "Error loading slots", e)
-                saveSlotsToPrefs(defaults)
             }
         }
     }
@@ -582,7 +573,7 @@ class TaskViewModel(
             saveSlotsToPrefs(currentList)
             viewModelScope.launch {
                 val date = _currentDate.value
-                val tasks = repository.getTasksForDateList(date, slotCategories.value)
+                val tasks = repository.getTasksForDateList(date)
                 tasks.forEach { task ->
                     if (task.slotCategory == slotToDelete) {
                         repository.updateTask(task.copy(slotCategory = "Custom Tasks"))
@@ -659,7 +650,7 @@ class TaskViewModel(
             )
             repository.insertTask(newTask)
             
-            val updatedTasks = repository.getTasksForDateList(date, slotCategories.value)
+            val updatedTasks = repository.getTasksForDateList(date)
             val insertedTask = updatedTasks.find { 
                 it.title == title && it.hour == hour && it.minute == minute && it.slotCategory == slotCategory && !it.isCompleted 
             }
