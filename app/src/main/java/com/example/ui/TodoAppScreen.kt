@@ -458,10 +458,11 @@ fun TodoAppScreen(
                             } else {
                                 val dynamicSlotOrder = if (slotOrder.isEmpty()) {
                                     listOf(
-                                        "Slot 1: 07AM to 02PM -- Backlog clear",
-                                        "Slot 2: 02PM to 04PM -- Revision",
-                                        "Slot 3: 04PM to 09PM -- Classes",
-                                        "Slot 4: 09PM to 12AM -- Questions and H.W",
+                                        "Slot 1: 9 AM to 1PM -- 2 Classes",
+                                        "Slot 2: 1 PM to 2 PM -- Break",
+                                        "Slot 3: 2 PM to 4 PM -- 1 Classes",
+                                        "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W",
+                                        "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice",
                                         "Custom Tasks"
                                     )
                                 } else {
@@ -663,10 +664,11 @@ fun TodoAppScreen(
 
                     val dynamicSlotOrderEdit = if (slotOrder.isEmpty()) {
                         listOf(
-                            "Slot 1: 07AM to 02PM -- Backlog clear",
-                            "Slot 2: 02PM to 04PM -- Revision",
-                            "Slot 3: 04PM to 09PM -- Classes",
-                            "Slot 4: 09PM to 12AM -- Questions and H.W",
+                            "Slot 1: 9 AM to 1PM -- 2 Classes",
+                            "Slot 2: 1 PM to 2 PM -- Break",
+                            "Slot 3: 2 PM to 4 PM -- 1 Classes",
+                            "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W",
+                            "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice",
                             "Custom Tasks"
                         )
                     } else {
@@ -1451,10 +1453,11 @@ fun SettingsScreenView(
     val rawSlots by viewModel.slotCategories.collectAsStateWithLifecycle()
     val dynamicSlotOrder = if (rawSlots.isEmpty()) {
         listOf(
-            "Slot 1: 07AM to 02PM -- Backlog clear",
-            "Slot 2: 02PM to 04PM -- Revision",
-            "Slot 3: 04PM to 09PM -- Classes",
-            "Slot 4: 09PM to 12AM -- Questions and H.W",
+            "Slot 1: 9 AM to 1PM -- 2 Classes",
+            "Slot 2: 1 PM to 2 PM -- Break",
+            "Slot 3: 2 PM to 4 PM -- 1 Classes",
+            "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W",
+            "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice",
             "Custom Tasks"
         )
     } else {
@@ -1984,13 +1987,14 @@ fun SettingsScreenView(
                 }
             }
 
-            // SYSTEM ACCESS PANEL
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(cornerRadius = 20.dp, borderAlpha = 0.35f, bgAlpha = 0.08f)
-                    .padding(16.dp)
-            ) {
+            // SYSTEM ACCESS PANEL - Disabled to make slots and scheduling permanent and stable
+            if (false) Box {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .liquidGlass(cornerRadius = 20.dp, borderAlpha = 0.35f, bgAlpha = 0.08f)
+                        .padding(16.dp)
+                ) {
                 Text(
                     text = "ADVANCED SYSTEM ACCESS",
                     fontSize = 11.sp,
@@ -2213,7 +2217,7 @@ fun SettingsScreenView(
                         }
                     }
                 }
-            }
+            } }
 
             Spacer(modifier = Modifier.height(12.dp))
 

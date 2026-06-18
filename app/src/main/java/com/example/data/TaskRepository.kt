@@ -11,119 +11,114 @@ class TaskRepository(private val taskDao: TaskDao) {
 
     suspend fun checkAndPrepopulateTasksForDate(dateString: String): List<Task> {
         val existing = taskDao.getTasksForDateList(dateString)
-        if (existing.isNotEmpty()) {
-            var updated = false
-            for (task in existing) {
-                if (task.title == "lecture 1") {
-                    taskDao.updateTask(task.copy(title = "Physics Question practice"))
-                    updated = true
-                } else if (task.title == "lecture 2") {
-                    taskDao.updateTask(task.copy(title = "Physical chemistry lecture"))
-                    updated = true
-                } else if (task.title == "lecture 3") {
-                    taskDao.updateTask(task.copy(title = "Maths lecture"))
-                    updated = true
-                } else if (task.title == "previous day revision" && task.timeRange == "02PM to 04PM") {
-                    taskDao.updateTask(task.copy(title = "last day revision"))
-                    updated = true
-                } else if (task.title == "2nd lecture H.W/DPP" || task.title == "2st lecture H.W/DPP") {
-                    if (task.title != "2st lecture H.W/DPP") {
-                        taskDao.updateTask(task.copy(title = "2st lecture H.W/DPP"))
-                        updated = true
-                    }
-                } else if (task.title == "3rd lecture H.W/DPP" || task.title == "3st lecture H.W/DPP") {
-                    if (task.title != "3st lecture H.W/DPP" || task.timeRange != "11PM to 12PM") {
-                        taskDao.updateTask(task.copy(title = "3st lecture H.W/DPP", timeRange = "11PM to 12PM"))
-                        updated = true
+        
+        // Identify if the user's daily tasks belong to any of the old schedule formats
+        val hasOldSlots = existing.any { 
+            it.slotCategory.contains("07AM to 02PM") || 
+            it.slotCategory.contains("02PM to 04PM") || 
+            it.slotCategory.contains("04PM to 09PM") || 
+            it.slotCategory.contains("09PM to 12AM") 
+        }
+        
+        if (existing.isEmpty() || hasOldSlots) {
+            // Remove the old system template tasks to avoid collision with the new layout
+            if (hasOldSlots) {
+                for (task in existing) {
+                    if (task.slotCategory.contains("07AM to 02PM") || 
+                        task.slotCategory.contains("02PM to 04PM") || 
+                        task.slotCategory.contains("04PM to 09PM") || 
+                        task.slotCategory.contains("09PM to 12AM")) {
+                        taskDao.deleteTask(task)
                     }
                 }
             }
-            if (updated) {
-                return taskDao.getTasksForDateList(dateString)
-            }
-        }
-        if (existing.isEmpty()) {
+            
             val defaultTasks = listOf(
+                // Slot 1: 9 AM to 1PM -- 2 Classes
                 Task(
-                    title = "Physics Question practice",
-                    timeRange = "07AM to 09AM",
-                    hour = 7,
-                    minute = 0,
-                    isCompleted = false,
-                    dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
-                ),
-                Task(
-                    title = "Physical chemistry lecture",
-                    timeRange = "09AM to 11AM",
+                    title = "Physics Lecture",
+                    timeRange = "9AM to 11AM",
                     hour = 9,
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
+                    slotCategory = "Slot 1: 9 AM to 1PM -- 2 Classes"
                 ),
                 Task(
-                    title = "Break",
-                    timeRange = "11AM to 12PM",
+                    title = "Maths Lecture",
+                    timeRange = "11AM to 1PM",
                     hour = 11,
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
+                    slotCategory = "Slot 1: 9 AM to 1PM -- 2 Classes"
                 ),
+                // Slot 2: 1 PM to 2 PM -- Break
                 Task(
-                    title = "Maths lecture",
-                    timeRange = "12PM to 02PM",
-                    hour = 12,
+                    title = "Break",
+                    timeRange = "1PM to 2PM",
+                    hour = 13,
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 1: 07AM to 02PM -- Backlog clear"
+                    slotCategory = "Slot 2: 1 PM to 2 PM -- Break"
                 ),
+                // Slot 3: 2 PM to 4 PM -- 1 Classes
                 Task(
-                    title = "last day revision",
-                    timeRange = "02PM to 04PM",
+                    title = "Physical Chemistry",
+                    timeRange = "2PM to 4PM",
                     hour = 14,
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 2: 02PM to 04PM -- Revision"
+                    slotCategory = "Slot 3: 2 PM to 4 PM -- 1 Classes"
                 ),
+                // Slot 4: 4 PM to 7 PM -- Classes DPP/H.W
                 Task(
-                    title = "live lectures",
-                    timeRange = "04PM to 09PM",
+                    title = "Physics Lecture DPP/H.W",
+                    timeRange = "4PM to 5PM",
                     hour = 16,
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 3: 04PM to 09PM -- Classes"
+                    slotCategory = "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W"
                 ),
                 Task(
-                    title = "1st lecture H.W/DPP",
-                    timeRange = "09PM to 10PM",
+                    title = "Maths Lecture DPP/H.W",
+                    timeRange = "5PM to 6PM",
+                    hour = 17,
+                    minute = 0,
+                    isCompleted = false,
+                    dateString = dateString,
+                    slotCategory = "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W"
+                ),
+                Task(
+                    title = "Physical Chemistry Lecture DPP/H.W",
+                    timeRange = "6PM to 7PM",
+                    hour = 18,
+                    minute = 0,
+                    isCompleted = false,
+                    dateString = dateString,
+                    slotCategory = "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W"
+                ),
+                // Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice
+                Task(
+                    title = "Physics Last Chapter Revision Questions/Practice",
+                    timeRange = "7PM to 9PM",
+                    hour = 19,
+                    minute = 0,
+                    isCompleted = false,
+                    dateString = dateString,
+                    slotCategory = "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice"
+                ),
+                Task(
+                    title = "Maths Last Chapter Revision Questions/Practice",
+                    timeRange = "9PM to 11PM",
                     hour = 21,
                     minute = 0,
                     isCompleted = false,
                     dateString = dateString,
-                    slotCategory = "Slot 4: 09PM to 12AM -- Questions and H.W"
-                ),
-                Task(
-                    title = "2st lecture H.W/DPP",
-                    timeRange = "10PM to 11PM",
-                    hour = 22,
-                    minute = 0,
-                    isCompleted = false,
-                    dateString = dateString,
-                    slotCategory = "Slot 4: 09PM to 12AM -- Questions and H.W"
-                ),
-                Task(
-                    title = "3st lecture H.W/DPP",
-                    timeRange = "11PM to 12PM",
-                    hour = 23,
-                    minute = 0,
-                    isCompleted = false,
-                    dateString = dateString,
-                    slotCategory = "Slot 4: 09PM to 12AM -- Questions and H.W"
+                    slotCategory = "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice"
                 )
             )
             for (task in defaultTasks) {

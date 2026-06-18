@@ -515,14 +515,24 @@ class TaskViewModel(
     fun loadSlotCategories() {
         val sharedPrefs = getApplication<Application>().getSharedPreferences("todo_settings", android.content.Context.MODE_PRIVATE)
         val serialized = sharedPrefs.getString("slot_categories", null)
-        if (serialized == null) {
-            val defaults = listOf(
-                "Slot 1: 07AM to 02PM -- Backlog clear",
-                "Slot 2: 02PM to 04PM -- Revision",
-                "Slot 3: 04PM to 09PM -- Classes",
-                "Slot 4: 09PM to 12AM -- Questions and H.W",
-                "Custom Tasks"
-            )
+        
+        val defaults = listOf(
+            "Slot 1: 9 AM to 1PM -- 2 Classes",
+            "Slot 2: 1 PM to 2 PM -- Break",
+            "Slot 3: 2 PM to 4 PM -- 1 Classes",
+            "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W",
+            "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice",
+            "Custom Tasks"
+        )
+        
+        val forceReset = serialized != null && (
+            serialized.contains("07AM to 02PM") ||
+            serialized.contains("02PM to 04PM") ||
+            serialized.contains("04PM to 09PM") ||
+            serialized.contains("09PM to 12AM")
+        )
+        
+        if (serialized == null || forceReset) {
             saveSlotsToPrefs(defaults)
         } else {
             try {
