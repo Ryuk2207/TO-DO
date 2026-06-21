@@ -458,11 +458,12 @@ fun TodoAppScreen(
                             } else {
                                 val dynamicSlotOrder = if (slotOrder.isEmpty()) {
                                     listOf(
-                                        "Slot 1: 9 AM to 1PM -- 2 Classes",
-                                        "Slot 2: 1 PM to 2 PM -- Break",
-                                        "Slot 3: 2 PM to 4 PM -- 1 Classes",
-                                        "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W",
-                                        "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice",
+                                        "Slot 1: 9AM to 11AM -- Question Practice , 1 Lecture",
+                                        "Slot 2: 1PM to 2PM -- Break",
+                                        "Slot 3: 2PM to 6PM -- 2 Classes",
+                                        "Slot 4: 6PM to 7PM -- Question Practice/Revision",
+                                        "Slot 5: 7PM to 8PM -- Break",
+                                        "Slot 6: 8PM to 11PM -- Lecture Dpp/H.W",
                                         "Custom Tasks"
                                     )
                                 } else {
@@ -664,11 +665,12 @@ fun TodoAppScreen(
 
                     val dynamicSlotOrderEdit = if (slotOrder.isEmpty()) {
                         listOf(
-                            "Slot 1: 9 AM to 1PM -- 2 Classes",
-                            "Slot 2: 1 PM to 2 PM -- Break",
-                            "Slot 3: 2 PM to 4 PM -- 1 Classes",
-                            "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W",
-                            "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice",
+                            "Slot 1: 9AM to 11AM -- Question Practice , 1 Lecture",
+                            "Slot 2: 1PM to 2PM -- Break",
+                            "Slot 3: 2PM to 6PM -- 2 Classes",
+                            "Slot 4: 6PM to 7PM -- Question Practice/Revision",
+                            "Slot 5: 7PM to 8PM -- Break",
+                            "Slot 6: 8PM to 11PM -- Lecture Dpp/H.W",
                             "Custom Tasks"
                         )
                     } else {
@@ -1383,25 +1385,11 @@ fun TaskItemCard(
             }
         }
 
-        // Edit and Delete Actions
+        // Delete Action for Custom Tasks (Edit button removed as requested)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            IconButton(
-                onClick = onEdit,
-                modifier = Modifier
-                    .glassButton(isCircle = true)
-                    .size(36.dp)
-                    .testTag("edit_task_${task.id}")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit Task Details",
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(16.dp)
-                )
-            }
             if (task.slotCategory == "Custom Tasks") {
                 IconButton(
                     onClick = onDelete,
@@ -1453,11 +1441,12 @@ fun SettingsScreenView(
     val rawSlots by viewModel.slotCategories.collectAsStateWithLifecycle()
     val dynamicSlotOrder = if (rawSlots.isEmpty()) {
         listOf(
-            "Slot 1: 9 AM to 1PM -- 2 Classes",
-            "Slot 2: 1 PM to 2 PM -- Break",
-            "Slot 3: 2 PM to 4 PM -- 1 Classes",
-            "Slot 4: 4 PM to 7 PM -- Classes DPP/H.W",
-            "Slot 5: 7 PM to 11 PM -- Last chapter Revision Questions/Practice",
+            "Slot 1: 9AM to 11AM -- Question Practice , 1 Lecture",
+            "Slot 2: 1PM to 2PM -- Break",
+            "Slot 3: 2PM to 6PM -- 2 Classes",
+            "Slot 4: 6PM to 7PM -- Question Practice/Revision",
+            "Slot 5: 7PM to 8PM -- Break",
+            "Slot 6: 8PM to 11PM -- Lecture Dpp/H.W",
             "Custom Tasks"
         )
     } else {
